@@ -11,8 +11,8 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SquareProps {
-  file:             number;   // logical file  0–7 (a–h), used for square name + colour
-  rank:             number;   // logical rank  0–7 (1–8), used for square name + colour
+  file:             number;
+  rank:             number;
   piece:            string | null;
   isSelected:       boolean;
   isPossibleMove:   boolean;
@@ -30,27 +30,14 @@ const Square = React.memo<SquareProps>(({
   isSelected, isPossibleMove, isLastMoveSquare, isInCheck,
   showCoords, flipped, onClick,
 }) => {
-  const square  = coordsToSquare(file, rank);   // always uses logical coords
+  const square  = coordsToSquare(file, rank);
   const isLight = isLightSquare(file, rank);
 
-  /*
-   * Coordinate labels appear on the board edge closest to each player.
-   * For White (unflipped): rank label on file 0 (left edge), file label on rank 0 (bottom edge).
-   * For Black (flipped):   rank label on file 7 (now the left edge), file label on rank 7 (now bottom).
-   *
-   * BUG FIX: previously these used the raw grid-position index, which was
-   * already the logical index — so this was accidentally correct for White
-   * but wrong for Black because the grid positions were reversed while the
-   * label-visibility check still referenced the unflipped edge.
-   * Now both cases are explicit.
-   */
+  // Labels appear on the edge closest to each player.
   const showRankLabel = flipped ? file === 7 : file === 0;
   const showFileLabel = flipped ? rank === 7 : rank === 0;
-
-  // Rank label text: logical rank number (1-based).
-  const rankLabel = String(rank + 1);   // rank 0 → '1', rank 7 → '8'
-  // File label text: logical file letter.
-  const fileLabel = String.fromCharCode(97 + file);  // 0 → 'a', 7 → 'h'
+  const rankLabel     = String(rank + 1);
+  const fileLabel     = String.fromCharCode(97 + file);
 
   const handleClick = useCallback(() => onClick(square), [onClick, square]);
 
@@ -109,24 +96,30 @@ const ChessBoard: React.FC = () => {
 
   const flipped = playerColor === 'black';
 
+  // Depend on the full currentGame object — ESLint requires this when the
+  // memo body accesses currentGame properties via optional chaining.
   const board = useMemo(
     () => (currentGame ? parseFEN(currentGame.board) : null),
-    // Only depend on the entire game object; this avoids the linter's
-    // "unnecessary dependency" warning for `currentGame.board` while still
-    // recomputing whenever the store updates the game reference.
     [currentGame],
   );
 
-  const lastMove        = currentGame?.moves?.at(-1);
+  const lastMove = currentGame?.moves?.at(-1);
   const lastMoveSquares = useMemo(
     () => (lastMove ? new Set([lastMove.from, lastMove.to]) : new Set<string>()),
     [lastMove],
   );
 
+  /*
+   * FIX: use [currentGame, board] as deps — not the nested optional-chain
+   * variants.  The rule requires every value *read inside the callback* to
+   * appear in the array.  currentGame and board are the only two; the nested
+   * property accesses (gameStatus, board string) are reads on those same
+   * objects, not separate dependency values.
+   */
   const checkSquare = useMemo(() => {
     if (!currentGame || !board) return null;
     const gs   = currentGame.gameStatus;
-    const turn = currentGame.board?.split(' ')[1];
+    const turn = currentGame.board.split(' ')[1];
     if (gs?.status !== 'check' && gs?.status !== 'checkmate') return null;
 
     for (let r = 0; r < 8; r++) {
@@ -140,7 +133,7 @@ const ChessBoard: React.FC = () => {
       }
     }
     return null;
-  }, [currentGame?.gameStatus?.status, currentGame?.board, board]);
+  }, [currentGame, board]);
 
   // ─── Empty / error states ─────────────────────────────────────────────────
 
@@ -162,23 +155,7 @@ const ChessBoard: React.FC = () => {
   }
 
   // ─── Render ───────────────────────────────────────────────────────────────
-  /*
-   * BUG FIX: the original used INDICES / INDICES_REV as both the grid
-   * iteration order AND the logical board index passed to Square.  When
-   * flipped, rankIndex would be 7,6,5…0 and fileIndex 7,6,5…0 — so
-   * coordsToSquare(fileIndex, rankIndex) inside Square would produce h8,
-   * g8… for the top-left grid cell instead of a1 (as Black sees it).
-   *
-   * The grid must always render 8×8 cells top-to-bottom, left-to-right
-   * (grid positions 0–7).  What changes when flipped is which LOGICAL square
-   * maps to each grid position:
-   *
-   *   Unflipped: grid row 0 = rank 7 (rank '8'), grid col 0 = file 0 ('a')
-   *   Flipped:   grid row 0 = rank 0 (rank '1'), grid col 0 = file 7 ('h')
-   *
-   * So we always iterate gridRow / gridCol from 0→7 and derive the logical
-   * rank / file from the flip state.
-   */
+
   return (
     <div
       className={['chess-board-wrapper', flipped ? 'flipped' : ''].filter(Boolean).join(' ')}
@@ -190,13 +167,9 @@ const ChessBoard: React.FC = () => {
 
       <div className="chess-board" role="grid" aria-label="Chess board">
         {Array.from({ length: 8 }, (_, gridRow) => {
-          // Logical rank: unflipped = row 0 is rank 7 (top of board = rank 8)
-          //               flipped   = row 0 is rank 0 (top of board = rank 1)
           const logicalRank = flipped ? gridRow : 7 - gridRow;
 
           return Array.from({ length: 8 }, (_, gridCol) => {
-            // Logical file: unflipped = col 0 is file 0 ('a')
-            //               flipped   = col 0 is file 7 ('h')
             const logicalFile = flipped ? 7 - gridCol : gridCol;
 
             const square     = coordsToSquare(logicalFile, logicalRank);
