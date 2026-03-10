@@ -18,48 +18,57 @@ const matchmakingService          = require('./services/matchmakingService');
 const gameManager                 = require('./services/gameManager');
 const { redisClient, connectRedis } = require('./redis/redisClient');
 
+// ─── Global Error Handlers ────────────────────────────────────────────────────
+
+process.on('uncaughtException', (err) => { 
+  console.error('❌ UNCAUGHT EXCEPTION:', err); 
+  process.exit(1); 
+}); 
+
+process.on('unhandledRejection', (reason, promise) => { 
+  console.error('❌ UNHANDLED REJECTION:', reason); 
+  process.exit(1); 
+});
+
 const app    = express();
 const server = http.createServer(app);
 const PORT   = process.env.PORT || 4000;
 
+// Trust Railway's proxy (for HTTPS detection, IP logging, etc.)
+app.set('trust proxy', 1);
+
 // ─── CORS origin list ─────────────────────────────────────────────────────────
 
-function isAllowedOrigin(origin) {
-  if (!origin) return true;                          // curl / mobile / same-origin
+/**
+ * Checks if a given origin is allowed to connect.
+ * Supports Railway domains, local dev, and same-origin.
+ */
+function checkOrigin(origin, callback) {
+  // same-origin / mobile / curl
+  if (!origin) return callback(null, true);
 
-  // Explicit production domain (set FRONTEND_URL in Railway if needed)
-  if (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) return true;
+  const isRailway = origin.includes('railway.app') || origin.includes('up.railway.app');
+  const isLocal   = process.env.NODE_ENV !== 'production' && (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:'));
+  const isCustom  = process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL;
 
-  // Any Railway deployment URL
-  if (origin.includes('railway.app')) return true;
-  if (origin.includes('up.railway.app')) return true;
-
-  // Local development
-  if (process.env.NODE_ENV !== 'production') {
-    if (origin.startsWith('http://localhost:')) return true;
-    if (origin.startsWith('https://localhost:')) return true;
+  if (isRailway || isLocal || isCustom) {
+    return callback(null, true);
   }
 
-  return false;
+  console.log('🚫 CORS blocked origin:', origin);
+  return callback(new Error('Not allowed by CORS'), false);
 }
 
 // ─── Socket.IO ────────────────────────────────────────────────────────────────
 
 const io = socketIo(server, {
   cors: {
-    origin: (origin, callback) => {
-      if (isAllowedOrigin(origin)) return callback(null, true);
-      console.log('CORS blocked origin:', origin);
-      return callback(new Error('Not allowed by CORS'));
-    },
+    origin:      checkOrigin,
     methods:     ['GET', 'POST'],
     credentials: true,
   },
   /*
    * FIX: list websocket first so Railway's proxy upgrades immediately.
-   * Starting with polling works locally but causes Railway's load balancer
-   * to sometimes drop the upgrade request, leaving clients on long-polling
-   * or stuck in a reconnect loop.
    */
   transports:   ['websocket', 'polling'],
   allowEIO3:    true,
@@ -69,11 +78,26 @@ const io = socketIo(server, {
 
 // ─── Express middleware ───────────────────────────────────────────────────────
 
+// Simple request logger for debugging 502/timeouts
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    if (duration > 1000) {
+      console.warn(`🐢 SLOW REQUEST: ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+    } else {
+      console.log(`📡 ${req.method} ${req.path} - ${res.statusCode} (${duration}ms)`);
+    }
+  });
+  next();
+});
+
 app.use(helmet({
-  // Allow socket.io scripts and same-origin requests
+  // Relax CSP for development/production debugging
   contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
 }));
-app.use(cors({ origin: isAllowedOrigin, credentials: true }));
+app.use(cors({ origin: checkOrigin, credentials: true }));
 app.use(express.json());
 
 // ─── Health / debug endpoints ─────────────────────────────────────────────────
@@ -119,7 +143,11 @@ console.log('   - Static Path:', staticPath);
 console.log('   - Static Files Check:', fs.existsSync(path.join(staticPath, 'index.html')) ? '✅ Found index.html' : '❌ index.html NOT FOUND');
 
 if (fs.existsSync(path.join(staticPath, 'index.html'))) {
-  app.use(express.static(staticPath));
+  // Use long-lived caching for static assets in production, but no cache for index.html
+  app.use(express.static(staticPath, {
+    maxAge: '1d',
+    index:  false, // We handle index.html manually via the catch-all
+  }));
 
   // Catch-all: return index.html for any non-API route (React Router support)
   app.get('*', (req, res) => {
@@ -127,19 +155,22 @@ if (fs.existsSync(path.join(staticPath, 'index.html'))) {
     if (req.path.startsWith('/health') ||
         req.path.startsWith('/debug')  ||
         req.path.startsWith('/socket.io')) {
-      console.log(`📡 Catch-all skipped for: ${req.path}`);
       return res.status(404).json({ error: 'Not found' });
     }
     
     // Log what requests are hitting the catch-all
     if (req.path.includes('.') && !req.path.endsWith('.html')) {
-      console.warn(`⚠️ Request for file ${req.path} fell through to catch-all. This usually means express.static failed to find it.`);
-    } else {
-      console.log(`📄 Serving index.html for: ${req.path}`);
+      console.warn(`⚠️ Request for asset ${req.path} fell through to catch-all. This usually means express.static failed to find it in ${staticPath}`);
     }
     
-    // Serve index.html for all other routes to support client-side routing
-    res.sendFile(path.join(staticPath, 'index.html'));
+    // Serve index.html with no-cache headers to ensure users always get the latest version
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.sendFile(path.join(staticPath, 'index.html'), (err) => {
+      if (err) {
+        console.error(`❌ Error sending index.html: ${err.message}`);
+        res.status(500).send('Server Error');
+      }
+    });
   });
 
   console.log('✅ Serving frontend from', staticPath);
@@ -170,12 +201,13 @@ io.on('connection', (socket) => {
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 
-const HOST = process.env.HOST || '0.0.0.0';
-
-server.listen(PORT, HOST, () => {
-  console.log(`🚀 Server running on http://${HOST}:${PORT}`);
+// For Railway, we MUST listen on the provided PORT and ideally on 0.0.0.0
+// to allow the proxy to reach the container.
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`📁 Static files: ${fs.existsSync(staticPath) ? '✅ present' : '❌ missing'}`);
+  console.log(`🔍 PID: ${process.pid}`);
 });
 
 // ─── Graceful shutdown ────────────────────────────────────────────────────────

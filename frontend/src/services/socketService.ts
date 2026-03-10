@@ -26,12 +26,12 @@ class SocketService {
      *  - In local dev: if no REACT_APP_BACKEND_URL is set and we're on
      *    port 3000, override to port 4000 where the backend runs.
      */
-    // For same-origin deployment, let socket.io determine the URL automatically.
-    // This is the most robust way to handle proxies and protocol upgrades.
     const isLocalhost = window.location.hostname === 'localhost';
-    const backendUrl  = isLocalhost ? envConfig.backendUrl : '';
+    // For same-origin deployment, let socket.io determine the URL automatically.
+    // In production, we'll use window.location.origin to be explicit for the proxy.
+    const backendUrl  = isLocalhost ? envConfig.backendUrl : window.location.origin;
 
-    console.log(`🔌 Socket: Initializing connection... (Target: ${backendUrl || 'SAME_ORIGIN'})`);
+    console.log(`🔌 Socket: Initializing connection... (Target: ${backendUrl})`);
 
     this.socket = io(backendUrl, {
       transports: ['websocket', 'polling'],
@@ -40,9 +40,6 @@ class SocketService {
       reconnectionAttempts: this.maxReconnectAttempts,
       reconnectionDelay: 1_000,
       reconnectionDelayMax: 5_000,
-      /*
-       * FIX: force secure: true if we're on an HTTPS origin.
-       */
       secure: window.location.protocol === 'https:',
     });
 
