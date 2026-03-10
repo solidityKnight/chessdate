@@ -26,10 +26,12 @@ class SocketService {
      *  - In local dev: if no REACT_APP_BACKEND_URL is set and we're on
      *    port 3000, override to port 4000 where the backend runs.
      */
-    const backendUrl = envConfig.backendUrl;
+    // For same-origin deployment, let socket.io determine the URL automatically.
+    // This is the most robust way to handle proxies and protocol upgrades.
+    const isLocalhost = window.location.hostname === 'localhost';
+    const backendUrl  = isLocalhost ? envConfig.backendUrl : '';
 
-    console.log('🔌 Connecting to Socket.IO at:', backendUrl);
-    console.log('   App Environment:', envConfig.appEnv);
+    console.log(`🔌 Socket: Initializing connection... (Target: ${backendUrl || 'SAME_ORIGIN'})`);
 
     this.socket = io(backendUrl, {
       transports: ['websocket', 'polling'],
@@ -39,11 +41,9 @@ class SocketService {
       reconnectionDelay: 1_000,
       reconnectionDelayMax: 5_000,
       /*
-       * FIX: In production, the client might be connecting from an HTTPS origin
-       * to an HTTP backend (which Railway proxies to HTTPS).
-       * We ensure secure: true if we're on HTTPS.
+       * FIX: force secure: true if we're on an HTTPS origin.
        */
-      secure: backendUrl.startsWith('https'),
+      secure: window.location.protocol === 'https:',
     });
 
     this.setupEventListeners();

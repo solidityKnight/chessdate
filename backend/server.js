@@ -127,7 +127,15 @@ if (fs.existsSync(path.join(staticPath, 'index.html'))) {
     if (req.path.startsWith('/health') ||
         req.path.startsWith('/debug')  ||
         req.path.startsWith('/socket.io')) {
+      console.log(`📡 Catch-all skipped for: ${req.path}`);
       return res.status(404).json({ error: 'Not found' });
+    }
+    
+    // Log what requests are hitting the catch-all
+    if (req.path.includes('.') && !req.path.endsWith('.html')) {
+      console.warn(`⚠️ Request for file ${req.path} fell through to catch-all. This usually means express.static failed to find it.`);
+    } else {
+      console.log(`📄 Serving index.html for: ${req.path}`);
     }
     
     // Serve index.html for all other routes to support client-side routing
