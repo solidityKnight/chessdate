@@ -1,0 +1,16 @@
+{
+  "name": "chessdate",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install": "cd backend && npm ci && cd ../frontend && npm ci",
+    "start": "cd backend && npm run start",
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm start\"",
+    "build:frontend": "cd frontend && npm run build",
+    "build": "npm run build:frontend",
+    "postinstall": "npm run build"
+  },
+  "dependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
