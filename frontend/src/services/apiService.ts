@@ -1,9 +1,10 @@
+import { envConfig } from '../config/env';
 // API service for HTTP requests (if needed in the future)
 class ApiService {
   private baseUrl: string;
 
   constructor() {
-    this.baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:4000/api';
+    this.baseUrl = envConfig.apiUrl;
   }
 
   private async request(endpoint: string, options: RequestInit = {}) {
