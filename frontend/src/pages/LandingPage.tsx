@@ -9,6 +9,7 @@ const LandingPage: React.FC = () => {
   const { isConnected } = useSocket();
   const navigate = useNavigate();
   const currentGame = useGameStore((state) => state.currentGame);
+  const error = useGameStore((state) => state.error);
 
   useEffect(() => {
     if (isConnected && currentGame && currentGame.status === 'active') {
@@ -35,11 +36,22 @@ const LandingPage: React.FC = () => {
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
               <p className="text-gray-400">Connecting to server...</p>
               {/* show any error we picked up during the connection process */}
-              {useGameStore.getState().error && (
-                <p className="text-red-400 text-xs mt-2">
-                  {useGameStore.getState().error}
-                </p>
+              {error && (
+                <div className="mt-4 p-3 bg-red-900/30 border border-red-800 rounded-lg">
+                  <p className="text-red-400 text-sm">
+                    {error}
+                  </p>
+                  <button 
+                    onClick={() => window.location.reload()}
+                    className="mt-2 text-xs text-red-300 underline hover:text-red-200"
+                  >
+                    Try refreshing the page
+                  </button>
+                </div>
               )}
+              <div className="mt-4 text-[10px] text-gray-600">
+                Host: {window.location.hostname}
+              </div>
             </div>
           ) : (
             <>

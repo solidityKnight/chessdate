@@ -28,27 +28,22 @@ class SocketService {
      */
     const backendUrl = envConfig.backendUrl;
 
-    console.log('🔌 Connecting to:', backendUrl);
+    console.log('🔌 Connecting to Socket.IO at:', backendUrl);
+    console.log('   App Environment:', envConfig.appEnv);
 
     this.socket = io(backendUrl, {
-      /*
-       * FIX: use websocket first for Railway.
-       * Railway's proxy supports WebSockets natively; starting with polling
-       * can cause the upgrade handshake to fail behind the proxy, leaving
-       * the client stuck on long-polling or failing entirely.
-       */
       transports: ['websocket', 'polling'],
       timeout: 20_000,
-      /*
-       * FIX: removed forceNew: true.
-       * forceNew creates a brand-new Manager on every connect() call,
-       * bypassing socket.io's built-in reconnection logic and causing
-       * duplicate connections when the component re-mounts.
-       */
       reconnection: true,
       reconnectionAttempts: this.maxReconnectAttempts,
       reconnectionDelay: 1_000,
       reconnectionDelayMax: 5_000,
+      /*
+       * FIX: In production, the client might be connecting from an HTTPS origin
+       * to an HTTP backend (which Railway proxies to HTTPS).
+       * We ensure secure: true if we're on HTTPS.
+       */
+      secure: backendUrl.startsWith('https'),
     });
 
     this.setupEventListeners();

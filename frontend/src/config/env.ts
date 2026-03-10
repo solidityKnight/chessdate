@@ -1,14 +1,13 @@
 const trimTrailingSlash = (value: string): string => value.replace(/\/+$/, '');
 
 const defaultBackendUrl = (): string => {
-  if (process.env.REACT_APP_BACKEND_URL) {
-    return trimTrailingSlash(process.env.REACT_APP_BACKEND_URL);
-  }
-
+  // If we're on localhost:3000, we're in dev mode and should connect to local backend (port 4000)
   if (window.location.hostname === 'localhost' && window.location.port === '3000') {
     return 'http://localhost:4000';
   }
 
+  // In all other cases (production, staging, etc.), we connect to the current origin
+  // This is the most robust way to handle same-origin deployments like Railway.
   return trimTrailingSlash(window.location.origin);
 };
 
