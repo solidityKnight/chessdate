@@ -105,13 +105,18 @@ connectRedis().catch((err) => {
 // ─── Frontend static files ────────────────────────────────────────────────────
 
 /*
- * FIX: staticPath needs to be absolute for reliable serving in different
- * environments. In Railway, the build folder is located at:
- * /app/frontend/build (assuming root is /app)
+ * FIX: Reliable static file serving for Railway.
+ * We resolve the path relative to the process root (cwd) for better consistency
+ * during Railway builds and deployments.
  */
-const staticPath = path.resolve(__dirname, '..', 'frontend', 'build');
+const staticPath = path.resolve(process.cwd(), 'frontend', 'build');
 
-console.log('🔍 Checking static files at:', staticPath);
+console.log('🔍 Deployment Diagnostics:');
+console.log('   - Port:', PORT);
+console.log('   - Node Env:', process.env.NODE_ENV || 'development');
+console.log('   - Process CWD:', process.cwd());
+console.log('   - Static Path:', staticPath);
+console.log('   - Static Files Check:', fs.existsSync(path.join(staticPath, 'index.html')) ? '✅ Found index.html' : '❌ index.html NOT FOUND');
 
 if (fs.existsSync(path.join(staticPath, 'index.html'))) {
   app.use(express.static(staticPath));
@@ -131,12 +136,8 @@ if (fs.existsSync(path.join(staticPath, 'index.html'))) {
 
   console.log('✅ Serving frontend from', staticPath);
 } else {
-  console.log('❌ No frontend build found at', staticPath);
-  console.log('   Current directory:', __dirname);
-  console.log('   Contents of parent directory:', fs.readdirSync(path.join(__dirname, '..')));
-  if (fs.existsSync(path.join(__dirname, '..', 'frontend'))) {
-    console.log('   Contents of frontend directory:', fs.readdirSync(path.join(__dirname, '..', 'frontend')));
-  }
+  console.log('❌ CRITICAL: Frontend build not found at', staticPath);
+  console.log('   Check: Does "npm run build" in the root finish successfully?');
 }
 
 // ─── Socket connection handling ───────────────────────────────────────────────
