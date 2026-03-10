@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
 const socketIo = require('socket.io');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -35,6 +36,25 @@ app.use(express.json());
 connectRedis().catch((err) => {
   console.error('Failed to connect to Redis:', err);
 });
+
+// Serve frontend build if it exists or if explicitly requested.
+// Railway builds the frontend during install, so the directory should be
+// present. The NODE_ENV check is helpful for local testing, but we also
+// allow forcing with SERVE_FRONTEND.
+{
+  const staticPath = path.join(__dirname, '..', 'frontend', 'build');
+  try {
+    require('fs').accessSync(staticPath);
+    app.use(express.static(staticPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(staticPath, 'index.html'));
+    });
+    console.log('Serving frontend build from', staticPath);
+  } catch {
+    // build directory doesn't exist; ignore
+    console.log('No frontend build found; skipping static middleware');
+  }
+}
 
 // Socket connection handling
 io.on('connection', (socket) => {
