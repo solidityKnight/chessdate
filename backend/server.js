@@ -20,11 +20,16 @@ const app = express();
 const server = http.createServer(app);
 
 // Configure Socket.IO with CORS
+// configure socket.io with CORS
 const io = socketIo(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
-    methods: ["GET", "POST"]
-  }
+    origin:
+      process.env.FRONTEND_URL ||
+      // when frontend is served from the same domain we can allow any
+      // origin since the static middleware serves it.
+      true,
+    methods: ["GET", "POST"],
+  },
 });
 
 // Middleware

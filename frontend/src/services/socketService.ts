@@ -12,7 +12,10 @@ class SocketService {
   connect(): Socket {
     if (this.socket?.connected) return this.socket;
 
-    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:4000';
+    // prefer explicit env var, but fall back to same-origin so the app works
+    // when frontend is served from the backend (typical on Railway).
+    const backendUrl =
+      process.env.REACT_APP_BACKEND_URL || window.location.origin || 'http://localhost:4000';
 
     this.socket = io(backendUrl, {
       transports: ['websocket', 'polling'],
