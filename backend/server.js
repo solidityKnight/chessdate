@@ -37,9 +37,43 @@ app.use(helmet());
 app.use(cors());
 app.use(express.json());
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    redis: redisClient.isOpen ? 'connected' : 'disconnected',
+    environment: process.env.NODE_ENV || 'development',
+    port: process.env.PORT || 4000,
+  });
+});
+
+// Debug endpoint for troubleshooting
+app.get('/debug', (req, res) => {
+  res.json({
+    redis: {
+      connected: redisClient.isOpen,
+      host: process.env.REDIS_HOST || 'localhost',
+      port: process.env.REDIS_PORT || 6379,
+    },
+    server: {
+      port: process.env.PORT || 4000,
+      node_env: process.env.NODE_ENV || 'development',
+      frontend_url: process.env.FRONTEND_URL || 'not set',
+    },
+    socket: {
+      clients: io.engine.clientsCount,
+    },
+  });
+});
+
 // Ensure Redis is connected once on startup
 connectRedis().catch((err) => {
   console.error('Failed to connect to Redis:', err);
+  console.error('Redis config:', {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: process.env.REDIS_PORT || 6379,
+  });
 });
 
 // Serve frontend build if it exists or if explicitly requested.
@@ -63,7 +97,7 @@ connectRedis().catch((err) => {
 
 // Socket connection handling
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id}`);
+  console.log(`User connected: ${socket.id} from ${socket.handshake.address}`);
 
   // Initialize socket handlers
   matchmakingSocket(socket, io);
@@ -82,6 +116,8 @@ const PORT = process.env.PORT || 4000;
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'not set (CORS allows any)'}`);
 });
 
 // Graceful shutdown
