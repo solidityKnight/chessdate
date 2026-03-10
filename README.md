@@ -50,27 +50,59 @@ Redis (Game state + queues)
 
 ## Project Structure
 
-```
-chessdate/
-├── frontend/                 # React TypeScript app
-│   ├── src/
-│   │   ├── components/       # React components
-│   │   ├── pages/           # Page components
-│   │   ├── hooks/           # Custom React hooks
-│   │   ├── services/        # API and socket services
-│   │   ├── store/           # Zustand store
-│   │   ├── utils/           # Helper functions
-│   │   └── App.tsx
-│   ├── package.json
-│   └── tailwind.config.js
+```text
+chessdate/ (Root)
+├── backend/                   # Node.js + Express + Socket.io Server
+│   ├── config/                # Server configurations
+│   │   └── socketConfig.js    # Socket.io options (CORS, transports)
+│   ├── models/                # Data structure definitions
+│   │   └── gameModel.js       # Game state and player schemas
+│   ├── redis/                 # Persistence layer
+│   │   └── redisClient.js     # Redis client with reconnect logic
+│   ├── services/              # Core business logic
+│   │   ├── chessService.js    # Chess.js move validation & FEN parsing
+│   │   ├── gameManager.js     # Game state persistence & cache management
+│   │   └── matchmakingService.js # Gender-based queue logic
+│   ├── sockets/               # Real-time event handlers
+│   │   ├── chatSocket.js      # Messaging & history handlers
+│   │   ├── gameSocket.js      # Move & resignation handlers
+│   │   └── matchmaking.js     # Connection & queue event handlers
+│   ├── package.json           # Backend dependencies & scripts
+│   └── server.js              # Main entry point (Express + Socket.io)
 │
-└── backend/                  # Node.js server
-    ├── sockets/             # Socket.io handlers
-    ├── services/            # Business logic
-    ├── redis/               # Redis client
-    ├── config/              # Configuration
-    ├── models/              # Data models
-    └── server.js
+├── frontend/                  # React + TypeScript + Tailwind Frontend
+│   ├── public/                # Static assets & index.html
+│   ├── src/                   # Source code
+│   │   ├── components/        # Reusable UI components
+│   │   │   ├── ChatBox.tsx    # Live messaging interface
+│   │   │   ├── ChessBoard.tsx # Interactive board with highlights
+│   │   │   ├── GameControls.tsx # Resign & new game buttons
+│   │   │   ├── GenderSelector.tsx # Matchmaking entry point
+│   │   │   └── MatchStatus.tsx # Opponent status & connection indicators
+│   │   ├── config/            # Frontend configuration
+│   │   │   └── env.ts         # Environment-aware URL resolution
+│   │   ├── hooks/             # Custom React hooks
+│   │   │   ├── useChessGame.ts # Game logic & state bridge
+│   │   │   └── useSocket.ts   # Connection lifecycle management
+│   │   ├── pages/             # Route-level components
+│   │   │   ├── GamePage.tsx   # Main game & chat layout
+│   │   │   └── LandingPage.tsx # Hero section & matchmaking UI
+│   │   ├── services/          # Communication layers
+│   │   │   ├── apiService.ts  # REST API clients
+│   │   │   └── socketService.ts # Socket.io client wrapper
+│   │   ├── store/             # Global state
+│   │   │   └── gameStore.ts   # Zustand store for game & queue
+│   │   ├── utils/             # Helper functions
+│   │   │   └── chessHelpers.ts # FEN parsing & square coordinate logic
+│   │   ├── App.tsx            # Main router & provider setup
+│   │   └── index.tsx          # React DOM entry point
+│   ├── package.json           # Frontend dependencies & build scripts
+│   ├── tailwind.config.js     # CSS utility configuration
+│   └── tsconfig.json          # TypeScript compiler options
+│
+├── Procfile                   # Railway/Heroku deployment manifest
+├── package.json               # Root orchestrator for mono-repo builds
+└── README.md                  # Project documentation
 ```
 
 ## Getting Started
