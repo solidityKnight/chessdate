@@ -69,7 +69,7 @@ class SocketService {
     // Connection
     this.socket.on('connect', () => {
       console.log('✅ Connected to server, socket ID:', this.socket?.id);
-      console.log('✅ Transport:', this.socket?.conn?.transport?.name);
+      // Note: Transport info is logged by socket.io internally
       this.reconnectAttempts = 0;
       useGameStore.getState().setConnected(true);
       useGameStore.getState().setError(null);
