@@ -111,10 +111,10 @@ const ChessBoard: React.FC = () => {
 
   const board = useMemo(
     () => (currentGame ? parseFEN(currentGame.board) : null),
-    // currentGame is intentionally included so that the memo updates if the
-    // entire game object changes (e.g. after reset).  The linter previously
-    // warned about omitting it.
-    [currentGame, currentGame?.board],
+    // Only depend on the entire game object; this avoids the linter's
+    // "unnecessary dependency" warning for `currentGame.board` while still
+    // recomputing whenever the store updates the game reference.
+    [currentGame],
   );
 
   const lastMove        = currentGame?.moves?.at(-1);
