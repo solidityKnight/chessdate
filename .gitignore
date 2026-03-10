@@ -8,12 +8,8 @@ yarn-error.log*
 build/
 dist/
 
-# Environment variables
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+# Environment variables (we recommend setting these via the host rather than files)
+# The project defaults to sensible localhost values when none are present.
 
 # IDE
 .vscode/
