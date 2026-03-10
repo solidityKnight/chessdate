@@ -19,6 +19,9 @@ const { redisClient, connectRedis } = require('./redis/redisClient');
 const app = express();
 const server = http.createServer(app);
 
+// Define PORT before using it in CORS configuration
+const PORT = process.env.PORT || 4000;
+
 // Configure Socket.IO with CORS
 // configure socket.io with CORS
 const io = socketIo(server, {
@@ -59,7 +62,7 @@ app.get('/health', (req, res) => {
     timestamp: new Date().toISOString(),
     redis: redisClient.isOpen ? 'connected' : 'disconnected',
     environment: process.env.NODE_ENV || 'development',
-    port: process.env.PORT || 4000,
+    port: PORT,
   });
 });
 
@@ -72,7 +75,7 @@ app.get('/debug', (req, res) => {
       port: process.env.REDIS_PORT || 6379,
     },
     server: {
-      port: process.env.PORT || 4000,
+      port: PORT,
       node_env: process.env.NODE_ENV || 'development',
       frontend_url: process.env.FRONTEND_URL || 'not set',
     },
@@ -175,10 +178,14 @@ io.on('connection', (socket) => {
 });
 
 server.listen(PORT, () => {
+  const fs = require('fs');
+  const staticPath = path.join(__dirname, '..', 'frontend', 'build');
+  const staticFilesPresent = fs.existsSync(staticPath);
+
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL || 'not set (CORS allows any)'}`);
-  console.log(`📁 Static files: ${require('fs').existsSync(path.join(__dirname, '..', 'frontend', 'build')) ? '✅ present' : '❌ missing'}`);
+  console.log(`📁 Static files: ${staticFilesPresent ? '✅ present' : '❌ missing'}`);
 });
 
 // Graceful shutdown
