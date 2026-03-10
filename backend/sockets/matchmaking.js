@@ -1,8 +1,10 @@
+'use strict';
+
 const matchmakingService = require('../services/matchmakingService');
-const gameManager = require('../services/gameManager');
+const gameManager        = require('../services/gameManager');
 
 function matchmakingSocket(socket, io) {
-  // Handle gender selection and matchmaking
+
   socket.on('select_gender', async (data) => {
     try {
       const { gender } = data;
@@ -14,41 +16,56 @@ function matchmakingSocket(socket, io) {
 
       console.log(`Player ${socket.id} selected gender: ${gender}`);
 
-      // Add player to matchmaking queue
       const match = await matchmakingService.addToQueue(socket.id, gender);
 
       if (match) {
-        // Match found! Create game
         const gameState = await gameManager.createGame(match.gameId, match.players);
 
-        // Join game room
+        const whiteSocketId = match.players.white.socketId;
+        const blackSocketId = match.players.black.socketId;
+
+        // Join both sockets to the game room
         socket.join(match.gameId);
-        const opponentSocketId = match.players.white.socketId === socket.id ?
-          match.players.black.socketId : match.players.white.socketId;
-        io.sockets.sockets.get(opponentSocketId)?.join(match.gameId);
+        io.sockets.sockets.get(
+          socket.id === whiteSocketId ? blackSocketId : whiteSocketId
+        )?.join(match.gameId);
 
-        // Determine player colors
-        const playerColor = match.players.white.socketId === socket.id ? 'white' : 'black';
-        const opponentColor = playerColor === 'white' ? 'black' : 'white';
-
-        // Notify both players
-        io.to(match.gameId).emit('game_start', {
+        const commonPayload = {
           gameId: match.gameId,
-          playerColor,
-          opponentColor,
-          board: gameState.board,
+          board:  gameState.board,
           players: {
-            [playerColor]: socket.id,
-            [opponentColor]: opponentSocketId
-          }
+            white: whiteSocketId,
+            black: blackSocketId,
+          },
+        };
+
+        /*
+         * BUG FIX: the original emitted game_start to the whole room via
+         * io.to(gameId).emit(...) with a single playerColor value derived
+         * from the *current* socket.  Both players received the same color,
+         * so the second player always saw the board from White's perspective
+         * and their turn guard never allowed them to move.
+         *
+         * Fix: emit individually to each socket with their correct color.
+         */
+        io.to(whiteSocketId).emit('game_start', {
+          ...commonPayload,
+          playerColor:   'white',
+          opponentColor: 'black',
         });
 
-        console.log(`Game ${match.gameId} started between ${match.players.white.socketId} and ${match.players.black.socketId}`);
+        io.to(blackSocketId).emit('game_start', {
+          ...commonPayload,
+          playerColor:   'black',
+          opponentColor: 'white',
+        });
+
+        console.log(`Game ${match.gameId} started — white: ${whiteSocketId}, black: ${blackSocketId}`);
+
       } else {
-        // No match found, player is in queue
         socket.emit('waiting_for_match', {
-          message: 'Waiting for an opponent...',
-          queuePosition: await matchmakingService.getQueueStats()
+          message:       'Waiting for an opponent...',
+          queuePosition: await matchmakingService.getQueueStats(),
         });
       }
     } catch (error) {
@@ -57,7 +74,6 @@ function matchmakingSocket(socket, io) {
     }
   });
 
-  // Handle matchmaking cancellation
   socket.on('cancel_matchmaking', async () => {
     try {
       await matchmakingService.removeFromQueue(socket.id);
@@ -68,7 +84,6 @@ function matchmakingSocket(socket, io) {
     }
   });
 
-  // Handle request for queue stats
   socket.on('get_queue_stats', async () => {
     try {
       const stats = await matchmakingService.getQueueStats();

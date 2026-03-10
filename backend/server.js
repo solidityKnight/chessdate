@@ -30,11 +30,26 @@ const io = socketIo(server, {
       // Allow requests with no origin (mobile apps, curl, etc.)
       if (!origin) return callback(null, true);
 
+      // Accept explicit frontend URL if provided (used in production
+      // deployments where we serve the client from a separate host).
+      const frontendUrl = process.env.FRONTEND_URL;
+      if (frontendUrl && origin === frontendUrl) {
+        return callback(null, true);
+      }
+
       // Allow same origin (when frontend is served from backend)
       if (origin === `http://localhost:${PORT}` ||
           origin === `https://localhost:${PORT}` ||
           origin.startsWith('https://web-production-') ||
           origin.includes('railway.app')) {
+        return callback(null, true);
+      }
+
+      // In development we frequently run the CRA dev server on 3000.  If
+      // that's the case, the browser will send origin "http://localhost:3000",
+      // which should be allowed temporarily but never in production.  We guard
+      // on NODE_ENV to avoid accidentally loosening CORS on the live site.
+      if (process.env.NODE_ENV !== 'production' && origin === 'http://localhost:3000') {
         return callback(null, true);
       }
 

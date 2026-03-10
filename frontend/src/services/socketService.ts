@@ -12,10 +12,29 @@ class SocketService {
   connect(): Socket {
     if (this.socket?.connected) return this.socket;
 
-    // prefer explicit env var, but fall back to same-origin so the app works
-    // when frontend is served from the backend (typical on Railway).
-    const backendUrl =
-      process.env.REACT_APP_BACKEND_URL || window.location.origin || 'http://localhost:4000';
+    // prefer explicit env var; this is the safest way to force the client
+    // to the right host when developing locally (webpack dev server runs on
+    // 3000 but our API/socket server runs on 4000) or when the front and back
+    // ends are split in production.
+    let backendUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin;
+
+    // When running the front-end dev server the origin will be http://localhost:3000
+    // which is *not* where the backend lives, so we override that with 4000.
+    // This fallback avoids the infamous "connecting to server forever" spinner
+    // that happens if you forget to set REACT_APP_BACKEND_URL locally.
+    if (!process.env.REACT_APP_BACKEND_URL) {
+      try {
+        const url = new URL(backendUrl);
+        if (url.hostname === 'localhost' && url.port === '3000') {
+          backendUrl = 'http://localhost:4000';
+        }
+      } catch {
+        // ignore malformed URL, we'll let socket.io handle it later
+      }
+    }
+
+    // final fallback in case everything above was undefined
+    backendUrl = backendUrl || 'http://localhost:4000';
 
     console.log('🔌 Connecting to:', backendUrl);
     console.log('🔌 Current window location:', window.location.href);

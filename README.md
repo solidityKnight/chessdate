@@ -75,6 +75,14 @@ chessdate/
 
 ## Getting Started
 
+> ⚠️ **Important**: the frontend must know where the socket server lives. During local
+> development this typically runs on port **4000** while the React dev server
+> runs on **3000**. The client will default to `window.location.origin` which
+> points to port 3000, causing the infamous "Connecting to server..." spinner
+> forever. Be sure to set `REACT_APP_BACKEND_URL` to `http://localhost:4000` (or
+> use the provided proxy in `package.json`) or upgrade to a release that
+> includes the automatic 3000→4000 fallback.
+
 ### Prerequisites
 
 - Node.js (v16 or higher)
@@ -198,6 +206,18 @@ You can also run `npm run dev` locally to launch both servers concurrently with 
 - Point the service to this repository
 - Railway will run `npm install` then `npm start` automatically
   (the `install` script builds the frontend; `start` launches the backend)
+
+> **Deployment tip:**
+> - Define `FRONTEND_URL` on the backend service (if the front‑end is split)
+>   so the CORS check can allow traffic from the client domain.
+> - For a single combined service where the backend serves the static
+>   build, no extra variables are required.
+>
+> When deploying the client separately, set `REACT_APP_BACKEND_URL` in the
+> frontend project’s Railway environment to the *backend* URL (e.g.
+> `https://xxx.up.railway.app`). Otherwise the client will default to
+> `window.location.origin` and try to connect to itself, resulting in the
+> "connecting to server" spinner.
 - The server will serve the React production build from `frontend/build` when
   `NODE_ENV=production` (Railway sets this automatically) or if you set
   `SERVE_FRONTEND=true`.

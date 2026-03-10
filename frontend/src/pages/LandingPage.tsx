@@ -34,6 +34,12 @@ const LandingPage: React.FC = () => {
             <div className="text-center py-8">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
               <p className="text-gray-400">Connecting to server...</p>
+              {/* show any error we picked up during the connection process */}
+              {useGameStore.getState().error && (
+                <p className="text-red-400 text-xs mt-2">
+                  {useGameStore.getState().error}
+                </p>
+              )}
             </div>
           ) : (
             <>
