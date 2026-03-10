@@ -111,8 +111,10 @@ const ChessBoard: React.FC = () => {
 
   const board = useMemo(
     () => (currentGame ? parseFEN(currentGame.board) : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [currentGame?.board],
+    // currentGame is intentionally included so that the memo updates if the
+    // entire game object changes (e.g. after reset).  The linter previously
+    // warned about omitting it.
+    [currentGame, currentGame?.board],
   );
 
   const lastMove        = currentGame?.moves?.at(-1);
