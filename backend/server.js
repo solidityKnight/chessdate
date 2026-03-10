@@ -23,13 +23,28 @@ const server = http.createServer(app);
 // configure socket.io with CORS
 const io = socketIo(server, {
   cors: {
-    origin:
-      process.env.FRONTEND_URL ||
-      // when frontend is served from the same domain we can allow any
-      // origin since the static middleware serves it.
-      true,
+    origin: function (origin, callback) {
+      // Allow requests with no origin (mobile apps, curl, etc.)
+      if (!origin) return callback(null, true);
+
+      // Allow same origin (when frontend is served from backend)
+      if (origin === `http://localhost:${PORT}` ||
+          origin === `https://localhost:${PORT}` ||
+          origin.startsWith('https://web-production-') ||
+          origin.includes('railway.app')) {
+        return callback(null, true);
+      }
+
+      console.log('CORS blocked origin:', origin);
+      return callback(new Error('Not allowed by CORS'));
+    },
     methods: ["GET", "POST"],
+    credentials: true,
   },
+  transports: ['websocket', 'polling'],
+  allowEIO3: true, // Allow Engine.IO v3 clients
+  pingTimeout: 60000,
+  pingInterval: 25000,
 });
 
 // Middleware
@@ -63,8 +78,40 @@ app.get('/debug', (req, res) => {
     },
     socket: {
       clients: io.engine.clientsCount,
+      cors_origin: 'configured with function',
     },
   });
+});
+
+// Test socket.io endpoint
+app.get('/socket-test', (req, res) => {
+  res.json({
+    message: 'Socket.io server is running',
+    socket_clients: io.engine.clientsCount,
+    timestamp: new Date().toISOString(),
+    server_info: {
+      port: PORT,
+      node_env: process.env.NODE_ENV,
+      cors_allowed: true,
+    },
+  });
+});
+
+// Test frontend serving
+app.get('/frontend-test', (req, res) => {
+  const staticPath = path.join(__dirname, '..', 'frontend', 'build');
+  const indexPath = path.join(staticPath, 'index.html');
+
+  if (require('fs').existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.json({
+      error: 'Frontend build not found',
+      static_path: staticPath,
+      exists: require('fs').existsSync(staticPath),
+      files: require('fs').existsSync(staticPath) ? require('fs').readdirSync(staticPath) : [],
+    });
+  }
 });
 
 // Ensure Redis is connected once on startup
@@ -86,38 +133,52 @@ connectRedis().catch((err) => {
     require('fs').accessSync(staticPath);
     app.use(express.static(staticPath));
     app.get('*', (req, res) => {
+      // Skip API routes
+      if (req.path.startsWith('/health') ||
+          req.path.startsWith('/debug') ||
+          req.path.startsWith('/socket-test')) {
+        return 'next';
+      }
       res.sendFile(path.join(staticPath, 'index.html'));
     });
-    console.log('Serving frontend build from', staticPath);
+    console.log('✅ Serving frontend build from', staticPath);
   } catch {
     // build directory doesn't exist; ignore
-    console.log('No frontend build found; skipping static middleware');
+    console.log('❌ No frontend build found; skipping static middleware');
   }
 }
 
 // Socket connection handling
 io.on('connection', (socket) => {
-  console.log(`User connected: ${socket.id} from ${socket.handshake.address}`);
+  console.log(`🔌 Socket connected: ${socket.id}`);
+  console.log(`   Origin: ${socket.handshake.headers.origin || 'none'}`);
+  console.log(`   User-Agent: ${socket.handshake.headers['user-agent']?.substring(0, 50)}...`);
+  console.log(`   Transport: ${socket.conn.transport.name}`);
+  console.log(`   Total clients: ${io.engine.clientsCount}`);
 
   // Initialize socket handlers
   matchmakingSocket(socket, io);
   gameSocket(socket, io);
   chatSocket(socket, io);
 
-  socket.on('disconnect', async () => {
-    console.log(`User disconnected: ${socket.id}`);
+  socket.on('disconnect', async (reason) => {
+    console.log(`🔌 Socket disconnected: ${socket.id}, reason: ${reason}`);
     // Handle player disconnection and remove from matchmaking queues
     await matchmakingService.removeFromQueue(socket.id);
     gameManager.handlePlayerDisconnect(socket.id, io);
   });
+
+  // Log when client sends any event
+  socket.onAny((event, ...args) => {
+    console.log(`📨 Socket ${socket.id} sent: ${event}`, args.length > 0 ? '(with data)' : '');
+  });
 });
 
-const PORT = process.env.PORT || 4000;
-
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'not set (CORS allows any)'}`);
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL || 'not set (CORS allows any)'}`);
+  console.log(`📁 Static files: ${require('fs').existsSync(path.join(__dirname, '..', 'frontend', 'build')) ? '✅ present' : '❌ missing'}`);
 });
 
 // Graceful shutdown

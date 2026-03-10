@@ -17,10 +17,20 @@ class SocketService {
     const backendUrl =
       process.env.REACT_APP_BACKEND_URL || window.location.origin || 'http://localhost:4000';
 
+    console.log('🔌 Connecting to:', backendUrl);
+    console.log('🔌 Current window location:', window.location.href);
+    console.log('🔌 REACT_APP_BACKEND_URL:', process.env.REACT_APP_BACKEND_URL || 'not set');
+
     this.socket = io(backendUrl, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'], // Try polling first, then websocket
       timeout: 20_000,
       forceNew: true,
+      upgrade: true,
+      rememberUpgrade: true,
+      // Add some Railway-specific options
+      extraHeaders: {
+        'User-Agent': 'ChessDate-Client/1.0',
+      },
     });
 
     this.setupEventListeners();
@@ -58,14 +68,15 @@ class SocketService {
 
     // Connection
     this.socket.on('connect', () => {
-      console.log('Connected to server');
+      console.log('✅ Connected to server, socket ID:', this.socket?.id);
+      console.log('✅ Transport:', this.socket?.conn?.transport?.name);
       this.reconnectAttempts = 0;
       useGameStore.getState().setConnected(true);
       useGameStore.getState().setError(null);
     });
 
     this.socket.on('disconnect', (reason) => {
-      console.log('Disconnected:', reason);
+      console.log('❌ Disconnected from server, reason:', reason);
       useGameStore.getState().setConnected(false);
       if (reason === 'io server disconnect') {
         this.socket?.connect();
@@ -73,7 +84,7 @@ class SocketService {
     });
 
     this.socket.on('connect_error', (error) => {
-      console.error('Connection error:', error);
+      console.error('❌ Connection error:', error.message);
       this.reconnectAttempts++;
       const msg = this.reconnectAttempts >= this.maxReconnectAttempts
         ? 'Max reconnection attempts reached'
