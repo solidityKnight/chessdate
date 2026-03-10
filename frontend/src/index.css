@@ -1,0 +1,379 @@
+/*
+ * BUG FIX: @import must come before ALL other rules — including @tailwind
+ * directives. Placing it after @tailwind base/components/utilities causes
+ * PostCSS / webpack to silently drop the import in many bundler configs,
+ * breaking the entire custom stylesheet.
+ */
+ @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+
+ @tailwind base;
+ @tailwind components;
+ @tailwind utilities;
+ 
+ /* ─── Design tokens ──────────────────────────────────────────────────────────── */
+ 
+ :root {
+   /* Board colours — Lichess-inspired warm wood palette */
+   --sq-light:           #f0d9b5;
+   --sq-dark:            #b58863;
+ 
+   /* Highlight states */
+   --sq-selected:        #7fc97f;
+   --sq-selected-ring:   #4caf50;
+   --sq-possible:        rgba(20, 85, 30, 0.45);
+   --sq-capture-ring:    rgba(20, 85, 30, 0.55);
+   --sq-last-move:       rgba(255, 235, 59, 0.6);
+   --sq-check:           #e04e4e;
+   --sq-check-ring:      #b71c1c;
+ 
+   /* Board chrome */
+   --board-border:       #704214;
+   --board-shadow:       0 8px 32px rgba(0, 0, 0, 0.45);
+   --coord-color-light:  #b58863;
+   --coord-color-dark:   #f0d9b5;
+ 
+   /*
+    * Piece colours.
+    * BUG FIX: the original had NO color rules on .piece, so all Unicode chess
+    * symbols inherited body color (#f9fafb — near white), making every piece
+    * appear white regardless of side.
+    */
+   --piece-white:        #ffffff;
+   --piece-white-shadow: #5a3a1a;   /* dark outline keeps white pieces visible on light squares */
+   --piece-black:        #1a1a1a;
+   --piece-black-shadow: #f0d9b5;   /* light outline keeps dark pieces visible on dark squares */
+ 
+   /* Chat */
+   --chat-own-bg:        #1d4ed8;
+   --chat-opponent-bg:   #374151;
+   --chat-system-bg:     #1f2937;
+ 
+   /* Status badges */
+   --status-waiting-bg:  #78350f;
+   --status-waiting-fg:  #fde68a;
+   --status-active-bg:   #064e3b;
+   --status-active-fg:   #6ee7b7;
+   --status-finished-bg: #7f1d1d;
+   --status-finished-fg: #fca5a5;
+ 
+   /* Typography */
+   --font-ui:   'DM Sans', ui-sans-serif, system-ui, sans-serif;
+   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+ 
+   /* Motion */
+   --duration-fast:   120ms;
+   --duration-normal: 220ms;
+   --ease-out:        cubic-bezier(0.22, 1, 0.36, 1);
+ }
+ 
+ /* ─── Base reset ─────────────────────────────────────────────────────────────── */
+ 
+ *,
+ *::before,
+ *::after {
+   box-sizing: border-box;
+ }
+ 
+ body {
+   margin: 0;
+   font-family: var(--font-ui);
+   background-color: #111827;
+   color: #f9fafb;
+   -webkit-font-smoothing: antialiased;
+   -moz-osx-font-smoothing: grayscale;
+ }
+ 
+ code,
+ pre {
+   font-family: var(--font-mono);
+ }
+ 
+ /* ─── Board wrapper ───────────────────────────────────────────────────────────── */
+ 
+ .chess-board-wrapper {
+   position: relative;
+   display: inline-block;
+   border: 6px solid var(--board-border);
+   border-radius: 4px;
+   box-shadow: var(--board-shadow);
+   transition: transform var(--duration-normal) var(--ease-out);
+   
+   /* FIX: make board responsive on mobile
+      - Constrains board to 90% of viewport width on small screens
+      - Max 480px on desktop
+      - Uses clamp() for smooth scaling across all screen sizes
+   */
+   --board-size: clamp(250px, 90vw, 480px);
+   width: var(--board-size);
+   height: var(--board-size);
+ }
+ 
+ .chess-board {
+   display: grid;
+   grid-template-columns: repeat(8, 1fr);
+   grid-template-rows: repeat(8, 1fr);
+   width: 100%;
+   height: 100%;
+ }
+ 
+ /* ─── Individual squares ─────────────────────────────────────────────────────── */
+ 
+ .chess-square {
+   position: relative;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   cursor: pointer;
+   transition:
+     filter        var(--duration-fast) var(--ease-out),
+     outline-color var(--duration-fast) var(--ease-out);
+   outline: 2px solid transparent;
+   outline-offset: -2px;
+   user-select: none;
+   
+   /* FIX: maintain square aspect ratio and responsive sizing */
+   aspect-ratio: 1;
+ }
+ 
+ .chess-square:focus-visible {
+   outline-color: #facc15;
+   z-index: 1;
+ }
+ 
+ .chess-square.light,
+ .chess-square.white {
+   background-color: var(--sq-light);
+ }
+ 
+ .chess-square.light:hover,
+ .chess-square.white:hover {
+   filter: brightness(0.93);
+ }
+ 
+ .chess-square.dark,
+ .chess-square.black {
+   background-color: var(--sq-dark);
+ }
+ 
+ .chess-square.dark:hover,
+ .chess-square.black:hover {
+   filter: brightness(1.1);
+ }
+ 
+ /* ─── Highlight states ───────────────────────────────────────────────────────── */
+ 
+ .chess-square.selected {
+   background-color: var(--sq-selected);
+   outline-color:    var(--sq-selected-ring);
+ }
+ 
+ .chess-square.last-move {
+   background-color: var(--sq-last-move);
+ }
+ 
+ .move-dot {
+   position: absolute;
+   width:  clamp(10px, 4vw, 22px);
+   height: clamp(10px, 4vw, 22px);
+   background-color: var(--sq-possible);
+   border-radius: 50%;
+   pointer-events: none;
+   animation: dot-pop var(--duration-normal) var(--ease-out) both;
+ }
+ 
+ .capture-ring {
+   position: absolute;
+   inset: 0;
+   border-radius: 50%;
+   border: clamp(2px, 0.5vw, 4px) solid var(--sq-capture-ring);
+   pointer-events: none;
+   animation: dot-pop var(--duration-normal) var(--ease-out) both;
+ }
+ 
+ @keyframes dot-pop {
+   from { opacity: 0; transform: scale(0.5); }
+   to   { opacity: 1; transform: scale(1);   }
+ }
+ 
+ .chess-square.in-check {
+   background-color: var(--sq-check);
+   outline-color:    var(--sq-check-ring);
+ }
+ 
+ /* ─── Coordinate labels ──────────────────────────────────────────────────────── */
+ 
+ .coord-label {
+   position: absolute;
+   font-size: clamp(0.5rem, 2vw, 0.75rem);
+   font-weight: 600;
+   line-height: 1;
+   pointer-events: none;
+   user-select: none;
+   color: var(--coord-color-light);
+ }
+ 
+ .rank-label { top: 3px;    left: 3px; }
+ .file-label { bottom: 3px; right: 4px; }
+ 
+ .chess-square.dark  .coord-label,
+ .chess-square.black .coord-label {
+   color: var(--coord-color-dark);
+ }
+ 
+ /* ─── Pieces ─────────────────────────────────────────────────────────────────── */
+ 
+ /*
+  * BUG FIX: added explicit color + text-shadow per piece side.
+  * Without these, all pieces inherit body color (#f9fafb) and appear white.
+  *
+  * .piece--white / .piece--black are set in chessHelpers via getPieceColor()
+  * and applied in ChessBoard.tsx's Square component.
+  */
+ .piece {
+   font-size: clamp(1.5rem, 8vw, 2.25rem);
+   line-height: 1;
+   display: flex;
+   align-items: center;
+   justify-content: center;
+   pointer-events: none;
+   transition: transform var(--duration-fast) var(--ease-out);
+   /* Prevent the piece inheriting whatever color the parent square has */
+   color: inherit;
+ }
+ 
+ .piece--white {
+   color: var(--piece-white);
+   text-shadow:
+     0 0 2px var(--piece-white-shadow),
+     0 1px 3px var(--piece-white-shadow);
+ }
+ 
+ .piece--black {
+   color: var(--piece-black);
+   text-shadow:
+     0 0 2px var(--piece-black-shadow),
+     0 1px 3px var(--piece-black-shadow);
+ }
+ 
+ .chess-square:active .piece {
+   transform: scale(0.9);
+ }
+ 
+ /* ─── Board loading overlay ──────────────────────────────────────────────────── */
+ 
+ .board-overlay {
+   position: absolute;
+   inset: 0;
+   background: rgba(0, 0, 0, 0.08);
+   border-radius: inherit;
+   pointer-events: none;
+   z-index: 10;
+   animation: pulse-overlay 1s ease-in-out infinite;
+ }
+ 
+ @keyframes pulse-overlay {
+   0%, 100% { opacity: 0.4; }
+   50%       { opacity: 1;   }
+ }
+ 
+ /* ─── Board placeholder ──────────────────────────────────────────────────────── */
+ 
+ .board-placeholder {
+   --board-size: clamp(250px, 90vw, 480px);
+   width:  var(--board-size);
+   height: var(--board-size);
+   display: flex;
+   flex-direction: column;
+   align-items: center;
+   justify-content: center;
+   gap: 16px;
+   background-color: #1f2937;
+   border: 6px solid var(--board-border);
+   border-radius: 4px;
+   color: #9ca3af;
+ }
+ 
+ .board-placeholder__spinner {
+   width:  clamp(30px, 6vw, 40px);
+   height: clamp(30px, 6vw, 40px);
+   border: 3px solid #374151;
+   border-top-color: #f0d9b5;
+   border-radius: 50%;
+   animation: spin 0.9s linear infinite;
+ }
+ 
+ @keyframes spin {
+   to { transform: rotate(360deg); }
+ }
+ 
+ /* ─── Chat ───────────────────────────────────────────────────────────────────── */
+ 
+ .chat-container {
+   max-height: 400px;
+   overflow-y: auto;
+   -webkit-overflow-scrolling: touch;
+   scrollbar-gutter: stable;
+ }
+ 
+ .chat-container::-webkit-scrollbar       { width: 6px; }
+ .chat-container::-webkit-scrollbar-track { background: transparent; }
+ .chat-container::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+ 
+ .chat-message {
+   padding: 8px 12px;
+   margin-bottom: 6px;
+   border-radius: 12px;
+   max-width: 80%;
+   font-size: 0.875rem;
+   line-height: 1.4;
+   word-break: break-word;
+ }
+ 
+ .chat-message.own {
+   background-color: var(--chat-own-bg);
+   color: #fff;
+   margin-left: auto;
+   border-bottom-right-radius: 4px;
+ }
+ 
+ .chat-message.opponent {
+   background-color: var(--chat-opponent-bg);
+   color: #f3f4f6;
+   margin-right: auto;
+   border-bottom-left-radius: 4px;
+ }
+ 
+ .chat-message.system {
+   background-color: var(--chat-system-bg);
+   color: #9ca3af;
+   margin: 0 auto 6px;
+   text-align: center;
+   font-style: italic;
+   border-radius: 8px;
+   max-width: 90%;
+ }
+ 
+ /* ─── Game status badge ──────────────────────────────────────────────────────── */
+ 
+ .game-status {
+   padding: 10px 16px;
+   border-radius: 8px;
+   text-align: center;
+   font-size: 0.875rem;
+   font-weight: 600;
+   letter-spacing: 0.02em;
+   text-transform: uppercase;
+ }
+ 
+ .game-status.waiting  { background-color: var(--status-waiting-bg);  color: var(--status-waiting-fg);  }
+ .game-status.active   { background-color: var(--status-active-bg);   color: var(--status-active-fg);   }
+ .game-status.finished { background-color: var(--status-finished-bg); color: var(--status-finished-fg); }
+ 
+ /* ─── Reduced-motion ─────────────────────────────────────────────────────────── */
+ 
+ @media (prefers-reduced-motion: reduce) {
+   *, *::before, *::after {
+     animation-duration:  1ms !important;
+     transition-duration: 1ms !important;
+   }
+ }
