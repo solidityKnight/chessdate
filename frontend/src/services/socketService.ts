@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client';
 import { useGameStore } from '../store/gameStore';
 import type { MoveRecord, GameStatus, ChatMessage } from '../store/gameStore';
+import { envConfig } from '../config/env';
 
 class SocketService {
   private socket: Socket | null = null;
@@ -25,21 +26,7 @@ class SocketService {
      *  - In local dev: if no REACT_APP_BACKEND_URL is set and we're on
      *    port 3000, override to port 4000 where the backend runs.
      */
-    let backendUrl: string;
-
-    if (process.env.REACT_APP_BACKEND_URL) {
-      // Explicit override — used when frontend and backend are on different domains.
-      backendUrl = process.env.REACT_APP_BACKEND_URL;
-    } else if (
-      window.location.hostname === 'localhost' &&
-      window.location.port === '3000'
-    ) {
-      // Local CRA dev server — backend is on 4000.
-      backendUrl = 'http://localhost:4000';
-    } else {
-      // Same-origin deployment (Railway, etc.) — use current origin.
-      backendUrl = window.location.origin;
-    }
+    const backendUrl = envConfig.backendUrl;
 
     console.log('🔌 Connecting to:', backendUrl);
 
