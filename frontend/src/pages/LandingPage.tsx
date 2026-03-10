@@ -64,6 +64,9 @@ const LandingPage: React.FC = () => {
 
           <div className="mt-8 text-center text-xs text-gray-500">
             <p>No registration required • Random matchmaking • Play & chat</p>
+            <div className="mt-4 pt-4 border-t border-gray-700 opacity-50">
+              <p>v1.0.2 • {window.location.hostname} • {isConnected ? '🟢 Connected' : '🔴 Disconnected'}</p>
+            </div>
           </div>
         </div>
       </div>
