@@ -46,7 +46,8 @@ function chatSocket(socket, io) {
     try {
       const { gameId } = data;
 
-      const gameState = await gameManager.getGameState(gameId);
+      // Force Redis read for full chat history
+      const gameState = await gameManager.getGameState(gameId, true);
       if (!gameState) {
         socket.emit('error', { message: 'Game not found' });
         return;

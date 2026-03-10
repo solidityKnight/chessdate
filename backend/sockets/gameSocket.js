@@ -42,7 +42,8 @@ function gameSocket(socket, io) {
       return null;
     }
 
-    const gameState = await gameManager.getGameState(gameId);
+    // Skip Redis for the status check if it's cached.
+    const gameState = await gameManager.getGameState(gameId, false);
     if (!gameState || gameState.status !== 'active') {
       emitError(callerEvent, 'Game not active');
       return null;
@@ -218,7 +219,8 @@ function gameSocket(socket, io) {
         return;
       }
 
-      const gameState = await gameManager.getGameState(gameId);
+      // Fast path: use cache only for move generation
+      const gameState = await gameManager.getGameState(gameId, false);
       if (!gameState) {
         emitError('get_possible_moves', 'Game not found');
         return;

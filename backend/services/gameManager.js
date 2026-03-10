@@ -57,8 +57,28 @@ class GameManager {
    * @returns {Promise<GameState|null>}
    */
   async _loadFromRedis(gameId) {
+    // If it's in our in-memory cache, that's the fastest source of truth
+    // for active games. We only hit Redis if the cache is empty.
+    const cached = this.games.get(gameId);
+    if (cached) {
+      // We still need to return a GameState-like object. 
+      // This is a bit complex because the cache holds the Chess instance.
+      // For now, we'll hit Redis to ensure we get chat history and moves,
+      // but we'll use the cached board if it exists.
+    }
+
     const raw = await redisClient.get(REDIS_KEY(gameId));
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    
+    const gameState = JSON.parse(raw);
+    
+    // If we have a cached chess instance, its FEN is more up-to-date
+    // than Redis if we are in the middle of a move sequence.
+    if (cached) {
+      gameState.board = cached.chess.fen();
+    }
+    
+    return gameState;
   }
 
   /**
@@ -146,26 +166,48 @@ class GameManager {
   /**
    * Return the authoritative GameState for a game.
    *
-   * BUG FIX: the original blended the cached Chess FEN with stale Redis data.
-   * Since makeMove always flushes to Redis, Redis is the source of truth;
-   * the in-memory cache only holds the live Chess instance (which can
-   * diverge if the process restarts). Strategy: always read from Redis,
-   * re-hydrate cache when the entry is missing.
+   * STRATEGY: 
+   * 1. Check in-memory cache first. If found, we can reconstruct the state
+   *    without a Redis read for many properties.
+   * 2. If not in cache, load from Redis and hydrate cache.
    *
    * @param {string} gameId
+   * @param {boolean} [forceRedis=false]  Force a fresh read from Redis (for chat history etc.)
    * @returns {Promise<GameState|null>}
    */
-  async getGameState(gameId) {
+  async getGameState(gameId, forceRedis = false) {
     try {
-      const gameState = await this._loadFromRedis(gameId);
-      if (!gameState) return null;
+      const cached = this.games.get(gameId);
+      
+      // For move generation and turn checking, we can skip Redis entirely 
+      // if we have a cached game instance and don't need history.
+      if (cached && !forceRedis) {
+        // Return a partial GameState that is sufficient for turn/move checks.
+        // We still need the players object which is in our cache entry.
+        return {
+          gameId,
+          players:    cached.players,
+          board:      cached.chess.fen(),
+          status:     cached.status,
+          moves:      [], // Omitted for speed
+          chatMessages: [], // Omitted for speed
+        };
+      }
 
-      // Keep cache in sync with Redis.
-      if (!this.games.has(gameId)) {
-        this._hydrate(gameState);
+      // If we need history (e.g. for a full state sync or chat history), 
+      // or if the cache is empty, we must hit Redis.
+      const raw = await redisClient.get(REDIS_KEY(gameId));
+      if (!raw) return null;
+      
+      const gameState = JSON.parse(raw);
+      
+      if (cached) {
+        // Overlay the latest live FEN and status onto the Redis data
+        gameState.board = cached.chess.fen();
+        gameState.status = cached.status;
       } else {
-        // Update status in cache so getPlayerColor / move-guard stay correct.
-        this.games.get(gameId).status = gameState.status;
+        // Re-prime the cache if it's missing (e.g. after process restart)
+        this._hydrate(gameState);
       }
 
       return gameState;

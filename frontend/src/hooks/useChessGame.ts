@@ -91,25 +91,19 @@ export const useChessGame = () => {
     (square: string) => {
       if (!currentGame || currentGame.status !== 'active') return;
 
-      /*
-       * BUG FIX (turn guard): the original derived `currentTurn` from
-       * `currentGame.board?.split(' ')[1]` which is correct — chess.js FEN
-       * always has the active colour as the second space-separated field.
-       * However when `playerColor` was null (because the selector was
-       * recreating a new object on every render and causing a race), this
-       * comparison always evaluated to false, silently blocking every click.
-       *
-       * Now that playerColor comes from a stable scalar selector above, this
-       * guard works correctly: it only allows interaction on the player's turn.
-       */
-      if (playerColor) {
-        const currentTurn = currentGame.board.split(' ')[1]; // 'w' | 'b'
-        const myTurn =
-          (playerColor === 'white' && currentTurn === 'w') ||
-          (playerColor === 'black' && currentTurn === 'b');
-        if (!myTurn) return;
+      const currentTurn = currentGame.board.split(' ')[1]; // 'w' | 'b'
+      const myTurn =
+        (playerColor === 'white' && currentTurn === 'w') ||
+        (playerColor === 'black' && currentTurn === 'b');
+
+      // 1. If it's a move execution (clicking a possible move)
+      if (selectedSquare && possibleMoves.includes(square)) {
+        if (!myTurn) return; // Only move on your turn
+        makeMove(selectedSquare, square);
+        return;
       }
 
+      // 2. If it's a piece selection
       if (selectedSquare === square) {
         // Deselect
         setSelectedSquare(null);
@@ -117,15 +111,16 @@ export const useChessGame = () => {
         return;
       }
 
-      if (selectedSquare && possibleMoves.includes(square)) {
-        // Execute move
-        makeMove(selectedSquare, square);
-        return;
-      }
-
       // Select new square — possible moves are fetched by the effect above.
+      // We allow selecting ANY square (to see info) but only fetch moves 
+      // if it's the player's turn to keep the UI snappy and reduce server load.
       setSelectedSquare(square);
       setPossibleMoves([]);
+      
+      if (!myTurn) {
+        // Just show selection, don't ask server for moves if it's not our turn
+        return;
+      }
     },
     [selectedSquare, possibleMoves, makeMove, currentGame, playerColor],
   );
