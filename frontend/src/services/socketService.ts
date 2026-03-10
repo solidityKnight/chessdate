@@ -4,52 +4,64 @@ import type { MoveRecord, GameStatus, ChatMessage } from '../store/gameStore';
 
 class SocketService {
   private socket: Socket | null = null;
-  private reconnectAttempts  = 0;
+  private reconnectAttempts    = 0;
   private maxReconnectAttempts = 5;
 
-  // ─── Connection ─────────────────────────────────────────────────────────────
+  // ─── Connection ───────────────────────────────────────────────────────────
 
   connect(): Socket {
     if (this.socket?.connected) return this.socket;
 
-    // prefer explicit env var; this is the safest way to force the client
-    // to the right host when developing locally (webpack dev server runs on
-    // 3000 but our API/socket server runs on 4000) or when the front and back
-    // ends are split in production.
-    let backendUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin;
+    /*
+     * BUG FIX: the original tried several URL derivations but the most
+     * important case — same-origin Railway deployment where frontend and
+     * backend share one domain — was broken because the socket options
+     * forced 'polling' first and set forceNew every time, which caused
+     * Railway's proxy to reject the upgrade.
+     *
+     * Rule:
+     *  - In production (same origin): connect to window.location.origin,
+     *    let socket.io negotiate transport naturally (websocket preferred).
+     *  - In local dev: if no REACT_APP_BACKEND_URL is set and we're on
+     *    port 3000, override to port 4000 where the backend runs.
+     */
+    let backendUrl: string;
 
-    // When running the front-end dev server the origin will be http://localhost:3000
-    // which is *not* where the backend lives, so we override that with 4000.
-    // This fallback avoids the infamous "connecting to server forever" spinner
-    // that happens if you forget to set REACT_APP_BACKEND_URL locally.
-    if (!process.env.REACT_APP_BACKEND_URL) {
-      try {
-        const url = new URL(backendUrl);
-        if (url.hostname === 'localhost' && url.port === '3000') {
-          backendUrl = 'http://localhost:4000';
-        }
-      } catch {
-        // ignore malformed URL, we'll let socket.io handle it later
-      }
+    if (process.env.REACT_APP_BACKEND_URL) {
+      // Explicit override — used when frontend and backend are on different domains.
+      backendUrl = process.env.REACT_APP_BACKEND_URL;
+    } else if (
+      window.location.hostname === 'localhost' &&
+      window.location.port === '3000'
+    ) {
+      // Local CRA dev server — backend is on 4000.
+      backendUrl = 'http://localhost:4000';
+    } else {
+      // Same-origin deployment (Railway, etc.) — use current origin.
+      backendUrl = window.location.origin;
     }
 
-    // final fallback in case everything above was undefined
-    backendUrl = backendUrl || 'http://localhost:4000';
-
     console.log('🔌 Connecting to:', backendUrl);
-    console.log('🔌 Current window location:', window.location.href);
-    console.log('🔌 REACT_APP_BACKEND_URL:', process.env.REACT_APP_BACKEND_URL || 'not set');
 
     this.socket = io(backendUrl, {
-      transports: ['polling', 'websocket'], // Try polling first, then websocket
+      /*
+       * FIX: use websocket first for Railway.
+       * Railway's proxy supports WebSockets natively; starting with polling
+       * can cause the upgrade handshake to fail behind the proxy, leaving
+       * the client stuck on long-polling or failing entirely.
+       */
+      transports: ['websocket', 'polling'],
       timeout: 20_000,
-      forceNew: true,
-      upgrade: true,
-      rememberUpgrade: true,
-      // Add some Railway-specific options
-      extraHeaders: {
-        'User-Agent': 'ChessDate-Client/1.0',
-      },
+      /*
+       * FIX: removed forceNew: true.
+       * forceNew creates a brand-new Manager on every connect() call,
+       * bypassing socket.io's built-in reconnection logic and causing
+       * duplicate connections when the component re-mounts.
+       */
+      reconnection: true,
+      reconnectionAttempts: this.maxReconnectAttempts,
+      reconnectionDelay: 1_000,
+      reconnectionDelayMax: 5_000,
     });
 
     this.setupEventListeners();
@@ -64,14 +76,8 @@ class SocketService {
     }
   }
 
-  // ─── Public event subscription ───────────────────────────────────────────────
+  // ─── Public event subscription ────────────────────────────────────────────
 
-  /**
-   * FIX: `on` and `off` were missing from SocketService, causing TS2339
-   * errors in useChessGame.ts.  Exposed as thin wrappers around the underlying
-   * socket so callers (hooks, components) can subscribe to arbitrary events
-   * without importing socket.io-client directly.
-   */
   on<T = unknown>(event: string, handler: (data: T) => void): void {
     this.socket?.on(event, handler);
   }
@@ -80,22 +86,20 @@ class SocketService {
     this.socket?.off(event, handler);
   }
 
-  // ─── Internal event listeners ────────────────────────────────────────────────
+  // ─── Internal event listeners ─────────────────────────────────────────────
 
   private setupEventListeners(): void {
     if (!this.socket) return;
 
-    // Connection
     this.socket.on('connect', () => {
-      console.log('✅ Connected to server, socket ID:', this.socket?.id);
-      // Note: Transport info is logged by socket.io internally
+      console.log('✅ Connected, socket ID:', this.socket?.id);
       this.reconnectAttempts = 0;
       useGameStore.getState().setConnected(true);
       useGameStore.getState().setError(null);
     });
 
     this.socket.on('disconnect', (reason) => {
-      console.log('❌ Disconnected from server, reason:', reason);
+      console.log('❌ Disconnected, reason:', reason);
       useGameStore.getState().setConnected(false);
       if (reason === 'io server disconnect') {
         this.socket?.connect();
@@ -106,8 +110,8 @@ class SocketService {
       console.error('❌ Connection error:', error.message);
       this.reconnectAttempts++;
       const msg = this.reconnectAttempts >= this.maxReconnectAttempts
-        ? 'Max reconnection attempts reached'
-        : 'Failed to connect to server';
+        ? 'Max reconnection attempts reached. Please refresh.'
+        : `Connecting to server... (attempt ${this.reconnectAttempts})`;
       useGameStore.getState().setError(msg);
     });
 
@@ -122,16 +126,16 @@ class SocketService {
       playerColor:   'white' | 'black';
       opponentColor: 'white' | 'black';
       board:         string;
-      players?: { white: string; black: string };
+      players?:      { white: string; black: string };
     }) => {
       useGameStore.getState().setInQueue(false);
       useGameStore.getState().setQueueStats(null);
 
-      // Derive THIS client's colour from the socket id when possible,
-      // so each player sees their own pieces at the bottom and the
-      // correct "Playing as White/Black" text.
+      // Derive color from socket id when the players map is available.
+      // This is the safest source of truth since the server now emits
+      // individual payloads per player (matchmaking.js fix).
       const socketId = this.socket?.id;
-      let playerColor: 'white' | 'black'   = data.playerColor;
+      let playerColor:   'white' | 'black' = data.playerColor;
       let opponentColor: 'white' | 'black' = data.opponentColor;
 
       if (socketId && data.players) {
@@ -145,13 +149,13 @@ class SocketService {
       }
 
       useGameStore.getState().setCurrentGame({
-        gameId:        data.gameId,
+        gameId:     data.gameId,
         playerColor,
         opponentColor,
-        board:         data.board,
-        status:        'active',
-        moves:         [],
-        gameStatus:    { status: 'active' },
+        board:      data.board,
+        status:     'active',
+        moves:      [],
+        gameStatus: { status: 'active' },
       });
     });
 
@@ -159,16 +163,6 @@ class SocketService {
       useGameStore.getState().setQueueStats(stats);
     });
 
-    // Game: move_made
-    /**
-     * FIX: the original called updateBoard(board) only, discarding the move
-     * record and gameStatus from the payload.  Now passes all three so the
-     * store stays fully in sync in a single atomic update.
-     * 
-     * BUG FIX: Removed the premature game status setting. The 'move_made' 
-     * event should only update the board and gameStatus, not set the overall
-     * game status to finished. The 'game_over' event handles that.
-     */
     this.socket.on('move_made', (data: {
       board:      string;
       move:       MoveRecord;
@@ -188,31 +182,18 @@ class SocketService {
       useGameStore.getState().setGameStatus('finished', data.winner, 'disconnect');
     });
 
-    // Game: new opponent request
-    /**
-     * FIX: added missing event handlers for request_new_game flow.
-     * When a player requests a new game, both players should:
-     * 1. Clear the current game
-     * 2. Reset matchmaking state
-     * 3. Allow gender selection again
-     */
     this.socket.on('ready_for_new_match', () => {
-      console.log('Ready for new match');
       useGameStore.getState().reset();
     });
 
     this.socket.on('game_cleanup_complete', () => {
-      console.log('Game cleanup complete');
       useGameStore.getState().reset();
     });
 
     this.socket.on('opponent_requested_new_game', () => {
-      console.log('Opponent requested new game');
-      // Optional: could set a message to notify the player
       useGameStore.getState().setError(null);
     });
 
-    // Chat
     this.socket.on('chat_message', (data: ChatMessage) => {
       useGameStore.getState().addChatMessage(data);
     });
@@ -221,10 +202,6 @@ class SocketService {
       data.messages.forEach((msg) => useGameStore.getState().addChatMessage(msg));
     });
 
-    // Possible moves — consumed directly by useChessGame via .on()/.off()
-    // No store update needed; the hook manages this state locally.
-
-    // Errors
     this.socket.on('error', (data: { message: string }) => {
       useGameStore.getState().setError(data.message);
     });
@@ -234,7 +211,7 @@ class SocketService {
     });
   }
 
-  // ─── Matchmaking ─────────────────────────────────────────────────────────────
+  // ─── Matchmaking ──────────────────────────────────────────────────────────
 
   selectGender(gender: 'male' | 'female'): void {
     if (!this.socket) return;
@@ -248,7 +225,7 @@ class SocketService {
     useGameStore.getState().setInQueue(false);
   }
 
-  // ─── Game ────────────────────────────────────────────────────────────────────
+  // ─── Game ─────────────────────────────────────────────────────────────────
 
   makeMove(from: string, to: string, promotion?: string): void {
     if (!this.socket) return;
@@ -257,12 +234,6 @@ class SocketService {
     this.socket.emit('make_move', { gameId, from, to, promotion });
   }
 
-  /**
-   * FIX: the original accepted no arguments and read gameId from the store
-   * internally — which is correct.  useChessGame.ts was erroneously passing
-   * gameId as an argument (TS2554: expected 0, got 1).  The method signature
-   * is kept as-is (no parameter); useChessGame.ts is fixed to not pass one.
-   */
   resignGame(): void {
     if (!this.socket) return;
     const gameId = useGameStore.getState().currentGame?.gameId;
@@ -277,16 +248,12 @@ class SocketService {
     this.socket.emit('request_new_game', { gameId });
   }
 
-  /**
-   * FIX: getPossibleMoves was missing entirely (TS2339).  Added to emit
-   * get_possible_moves with the canonical gameId from the store.
-   */
   getPossibleMoves(gameId: string, square: string): void {
     if (!this.socket) return;
     this.socket.emit('get_possible_moves', { gameId, square });
   }
 
-  // ─── Chat ────────────────────────────────────────────────────────────────────
+  // ─── Chat ─────────────────────────────────────────────────────────────────
 
   sendMessage(message: string): void {
     if (!this.socket) return;
@@ -302,7 +269,7 @@ class SocketService {
     this.socket.emit('get_chat_history', { gameId });
   }
 
-  // ─── Utilities ───────────────────────────────────────────────────────────────
+  // ─── Utilities ────────────────────────────────────────────────────────────
 
   getSocket(): Socket | null { return this.socket; }
   isConnected(): boolean     { return this.socket?.connected ?? false; }

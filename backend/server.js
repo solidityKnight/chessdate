@@ -1,211 +1,168 @@
-const express = require('express');
-const http = require('http');
-const path = require('path');
+'use strict';
+
+const express  = require('express');
+const http     = require('http');
+const path     = require('path');
+const fs       = require('fs');
 const socketIo = require('socket.io');
-const cors = require('cors');
-const helmet = require('helmet');
-const { Chess } = require('chess.js');
+const cors     = require('cors');
+const helmet   = require('helmet');
 
 // Import socket handlers
 const matchmakingSocket = require('./sockets/matchmaking');
-const gameSocket = require('./sockets/gameSocket');
-const chatSocket = require('./sockets/chatSocket');
+const gameSocket        = require('./sockets/gameSocket');
+const chatSocket        = require('./sockets/chatSocket');
 
 // Import services
-const matchmakingService = require('./services/matchmakingService');
-const gameManager = require('./services/gameManager');
+const matchmakingService          = require('./services/matchmakingService');
+const gameManager                 = require('./services/gameManager');
 const { redisClient, connectRedis } = require('./redis/redisClient');
 
-const app = express();
+const app    = express();
 const server = http.createServer(app);
+const PORT   = process.env.PORT || 4000;
 
-// Define PORT before using it in CORS configuration
-const PORT = process.env.PORT || 4000;
+// ─── CORS origin list ─────────────────────────────────────────────────────────
 
-// Configure Socket.IO with CORS
-// configure socket.io with CORS
+function isAllowedOrigin(origin) {
+  if (!origin) return true;                          // curl / mobile / same-origin
+
+  // Explicit production domain (set FRONTEND_URL in Railway if needed)
+  if (process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL) return true;
+
+  // Any Railway deployment URL
+  if (origin.includes('railway.app')) return true;
+  if (origin.includes('up.railway.app')) return true;
+
+  // Local development
+  if (process.env.NODE_ENV !== 'production') {
+    if (origin.startsWith('http://localhost:')) return true;
+    if (origin.startsWith('https://localhost:')) return true;
+  }
+
+  return false;
+}
+
+// ─── Socket.IO ────────────────────────────────────────────────────────────────
+
 const io = socketIo(server, {
   cors: {
-    origin: function (origin, callback) {
-      // Allow requests with no origin (mobile apps, curl, etc.)
-      if (!origin) return callback(null, true);
-
-      // Accept explicit frontend URL if provided (used in production
-      // deployments where we serve the client from a separate host).
-      const frontendUrl = process.env.FRONTEND_URL;
-      if (frontendUrl && origin === frontendUrl) {
-        return callback(null, true);
-      }
-
-      // Allow same origin (when frontend is served from backend)
-      if (origin === `http://localhost:${PORT}` ||
-          origin === `https://localhost:${PORT}` ||
-          origin.startsWith('https://web-production-') ||
-          origin.includes('railway.app')) {
-        return callback(null, true);
-      }
-
-      // In development we frequently run the CRA dev server on 3000.  If
-      // that's the case, the browser will send origin "http://localhost:3000",
-      // which should be allowed temporarily but never in production.  We guard
-      // on NODE_ENV to avoid accidentally loosening CORS on the live site.
-      if (process.env.NODE_ENV !== 'production' && origin === 'http://localhost:3000') {
-        return callback(null, true);
-      }
-
+    origin: (origin, callback) => {
+      if (isAllowedOrigin(origin)) return callback(null, true);
       console.log('CORS blocked origin:', origin);
       return callback(new Error('Not allowed by CORS'));
     },
-    methods: ["GET", "POST"],
+    methods:     ['GET', 'POST'],
     credentials: true,
   },
-  transports: ['websocket', 'polling'],
-  allowEIO3: true, // Allow Engine.IO v3 clients
-  pingTimeout: 60000,
-  pingInterval: 25000,
+  /*
+   * FIX: list websocket first so Railway's proxy upgrades immediately.
+   * Starting with polling works locally but causes Railway's load balancer
+   * to sometimes drop the upgrade request, leaving clients on long-polling
+   * or stuck in a reconnect loop.
+   */
+  transports:   ['websocket', 'polling'],
+  allowEIO3:    true,
+  pingTimeout:  60_000,
+  pingInterval: 25_000,
 });
 
-// Middleware
-app.use(helmet());
-app.use(cors());
+// ─── Express middleware ───────────────────────────────────────────────────────
+
+app.use(helmet({
+  // Allow socket.io scripts and same-origin requests
+  contentSecurityPolicy: false,
+}));
+app.use(cors({ origin: isAllowedOrigin, credentials: true }));
 app.use(express.json());
 
-// Health check endpoint
-app.get('/health', (req, res) => {
+// ─── Health / debug endpoints ─────────────────────────────────────────────────
+
+app.get('/health', (_req, res) => {
   res.json({
-    status: 'ok',
-    timestamp: new Date().toISOString(),
-    redis: redisClient.isOpen ? 'connected' : 'disconnected',
+    status:      'ok',
+    timestamp:   new Date().toISOString(),
+    redis:       redisClient.isOpen ? 'connected' : 'disconnected',
     environment: process.env.NODE_ENV || 'development',
-    port: PORT,
+    port:        PORT,
   });
 });
 
-// Debug endpoint for troubleshooting
-app.get('/debug', (req, res) => {
+app.get('/debug', (_req, res) => {
   res.json({
-    redis: {
-      connected: redisClient.isOpen,
-      host: process.env.REDIS_HOST || 'localhost',
-      port: process.env.REDIS_PORT || 6379,
-    },
-    server: {
-      port: PORT,
-      node_env: process.env.NODE_ENV || 'development',
-      frontend_url: process.env.FRONTEND_URL || 'not set',
-    },
-    socket: {
-      clients: io.engine.clientsCount,
-      cors_origin: 'configured with function',
-    },
+    redis:  { connected: redisClient.isOpen },
+    server: { port: PORT, node_env: process.env.NODE_ENV || 'development' },
+    socket: { clients: io.engine.clientsCount },
   });
 });
 
-// Test socket.io endpoint
-app.get('/socket-test', (req, res) => {
-  res.json({
-    message: 'Socket.io server is running',
-    socket_clients: io.engine.clientsCount,
-    timestamp: new Date().toISOString(),
-    server_info: {
-      port: PORT,
-      node_env: process.env.NODE_ENV,
-      cors_allowed: true,
-    },
-  });
-});
+// ─── Redis ────────────────────────────────────────────────────────────────────
 
-// Test frontend serving
-app.get('/frontend-test', (req, res) => {
-  const staticPath = path.join(__dirname, '..', 'frontend', 'build');
-  const indexPath = path.join(staticPath, 'index.html');
-
-  if (require('fs').existsSync(indexPath)) {
-    res.sendFile(indexPath);
-  } else {
-    res.json({
-      error: 'Frontend build not found',
-      static_path: staticPath,
-      exists: require('fs').existsSync(staticPath),
-      files: require('fs').existsSync(staticPath) ? require('fs').readdirSync(staticPath) : [],
-    });
-  }
-});
-
-// Ensure Redis is connected once on startup
 connectRedis().catch((err) => {
-  console.error('Failed to connect to Redis:', err);
-  console.error('Redis config:', {
-    host: process.env.REDIS_HOST || 'localhost',
-    port: process.env.REDIS_PORT || 6379,
-  });
+  console.error('❌ Failed to connect to Redis:', err.message);
 });
 
-// Serve frontend build if it exists or if explicitly requested.
-// Railway builds the frontend during install, so the directory should be
-// present. The NODE_ENV check is helpful for local testing, but we also
-// allow forcing with SERVE_FRONTEND.
-{
-  const staticPath = path.join(__dirname, '..', 'frontend', 'build');
-  try {
-    require('fs').accessSync(staticPath);
-    app.use(express.static(staticPath));
-    app.get('*', (req, res) => {
-      // Skip API routes
-      if (req.path.startsWith('/health') ||
-          req.path.startsWith('/debug') ||
-          req.path.startsWith('/socket-test')) {
-        return 'next';
-      }
-      res.sendFile(path.join(staticPath, 'index.html'));
-    });
-    console.log('✅ Serving frontend build from', staticPath);
-  } catch {
-    // build directory doesn't exist; ignore
-    console.log('❌ No frontend build found; skipping static middleware');
-  }
+// ─── Frontend static files ────────────────────────────────────────────────────
+
+/*
+ * FIX: __dirname here is chess/backend, so the build folder is one level up.
+ * Supports both monorepo layouts:
+ *   chess/frontend/build   ← standard
+ *   chess/build            ← if root-level build is ever used
+ */
+const staticPath = path.join(__dirname, '..', 'frontend', 'build');
+
+if (fs.existsSync(path.join(staticPath, 'index.html'))) {
+  app.use(express.static(staticPath));
+
+  // Catch-all: return index.html for any non-API route (React Router support)
+  app.get('*', (req, res) => {
+    if (req.path.startsWith('/health') ||
+        req.path.startsWith('/debug')  ||
+        req.path.startsWith('/socket.io')) {
+      return res.status(404).json({ error: 'Not found' });
+    }
+    res.sendFile(path.join(staticPath, 'index.html'));
+  });
+
+  console.log('✅ Serving frontend from', staticPath);
+} else {
+  console.log('❌ No frontend build found at', staticPath);
+  console.log('   Run: cd frontend && npm run build');
 }
 
-// Socket connection handling
-io.on('connection', (socket) => {
-  console.log(`🔌 Socket connected: ${socket.id}`);
-  console.log(`   Origin: ${socket.handshake.headers.origin || 'none'}`);
-  console.log(`   User-Agent: ${socket.handshake.headers['user-agent']?.substring(0, 50)}...`);
-  console.log(`   Transport: ${socket.conn.transport.name}`);
-  console.log(`   Total clients: ${io.engine.clientsCount}`);
+// ─── Socket connection handling ───────────────────────────────────────────────
 
-  // Initialize socket handlers
+io.on('connection', (socket) => {
+  console.log(`🔌 Connected: ${socket.id} via ${socket.conn.transport.name} (total: ${io.engine.clientsCount})`);
+
   matchmakingSocket(socket, io);
   gameSocket(socket, io);
   chatSocket(socket, io);
 
   socket.on('disconnect', async (reason) => {
-    console.log(`🔌 Socket disconnected: ${socket.id}, reason: ${reason}`);
-    // Handle player disconnection and remove from matchmaking queues
+    console.log(`🔌 Disconnected: ${socket.id}, reason: ${reason}`);
     await matchmakingService.removeFromQueue(socket.id);
     gameManager.handlePlayerDisconnect(socket.id, io);
   });
 
-  // Log when client sends any event
-  socket.onAny((event, ...args) => {
-    console.log(`📨 Socket ${socket.id} sent: ${event}`, args.length > 0 ? '(with data)' : '');
+  socket.onAny((event) => {
+    console.log(`📨 ${socket.id} → ${event}`);
   });
 });
 
-server.listen(PORT, () => {
-  const fs = require('fs');
-  const staticPath = path.join(__dirname, '..', 'frontend', 'build');
-  const staticFilesPresent = fs.existsSync(staticPath);
+// ─── Start ────────────────────────────────────────────────────────────────────
 
+server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🔗 Frontend URL: ${process.env.FRONTEND_URL || 'not set (CORS allows any)'}`);
-  console.log(`📁 Static files: ${staticFilesPresent ? '✅ present' : '❌ missing'}`);
+  console.log(`📁 Static files: ${fs.existsSync(staticPath) ? '✅ present' : '❌ missing'}`);
 });
 
-// Graceful shutdown
+// ─── Graceful shutdown ────────────────────────────────────────────────────────
+
 process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully');
+  console.log('SIGTERM received, shutting down');
   server.close(() => {
     redisClient.quit();
     process.exit(0);
