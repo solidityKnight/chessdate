@@ -105,30 +105,38 @@ connectRedis().catch((err) => {
 // ─── Frontend static files ────────────────────────────────────────────────────
 
 /*
- * FIX: __dirname here is chess/backend, so the build folder is one level up.
- * Supports both monorepo layouts:
- *   chess/frontend/build   ← standard
- *   chess/build            ← if root-level build is ever used
+ * FIX: staticPath needs to be absolute for reliable serving in different
+ * environments. In Railway, the build folder is located at:
+ * /app/frontend/build (assuming root is /app)
  */
-const staticPath = path.join(__dirname, '..', 'frontend', 'build');
+const staticPath = path.resolve(__dirname, '..', 'frontend', 'build');
+
+console.log('🔍 Checking static files at:', staticPath);
 
 if (fs.existsSync(path.join(staticPath, 'index.html'))) {
   app.use(express.static(staticPath));
 
   // Catch-all: return index.html for any non-API route (React Router support)
   app.get('*', (req, res) => {
+    // Skip if it's an API-like route or socket.io
     if (req.path.startsWith('/health') ||
         req.path.startsWith('/debug')  ||
         req.path.startsWith('/socket.io')) {
       return res.status(404).json({ error: 'Not found' });
     }
+    
+    // Serve index.html for all other routes to support client-side routing
     res.sendFile(path.join(staticPath, 'index.html'));
   });
 
   console.log('✅ Serving frontend from', staticPath);
 } else {
   console.log('❌ No frontend build found at', staticPath);
-  console.log('   Run: cd frontend && npm run build');
+  console.log('   Current directory:', __dirname);
+  console.log('   Contents of parent directory:', fs.readdirSync(path.join(__dirname, '..')));
+  if (fs.existsSync(path.join(__dirname, '..', 'frontend'))) {
+    console.log('   Contents of frontend directory:', fs.readdirSync(path.join(__dirname, '..', 'frontend')));
+  }
 }
 
 // ─── Socket connection handling ───────────────────────────────────────────────

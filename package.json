@@ -3,12 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "install": "cd backend && npm ci && cd ../frontend && npm ci",
-    "start": "cd backend && npm run start",
-    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm start\"",
+    "install:backend": "cd backend && npm install",
+    "install:frontend": "cd frontend && npm install",
     "build:frontend": "cd frontend && npm run build",
     "build": "npm run build:frontend",
-    "postinstall": "echo 'Building frontend...' && npm run build:frontend && echo 'Frontend build complete'"
+    "start": "cd backend && node server.js",
+    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm start\""
   },
   "dependencies": {
     "concurrently": "^8.2.0"
