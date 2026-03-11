@@ -48,10 +48,11 @@ function checkOrigin(origin, callback) {
   if (!origin) return callback(null, true);
 
   const isRailway = origin.includes('railway.app') || origin.includes('up.railway.app');
+  const isCustom  = origin.includes('chessdate.in');
   const isLocal   = process.env.NODE_ENV !== 'production' && (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:'));
-  const isCustom  = process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL;
+  const isExplicit = process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL;
 
-  if (isRailway || isLocal || isCustom) {
+  if (isRailway || isCustom || isLocal || isExplicit) {
     return callback(null, true);
   }
 
