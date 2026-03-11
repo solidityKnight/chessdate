@@ -81,6 +81,9 @@
    color: #f9fafb;
    -webkit-font-smoothing: antialiased;
    -moz-osx-font-smoothing: grayscale;
+   overflow: hidden; /* Prevent scrolling of the entire page */
+   height: 100vh;
+   width: 100vw;
  }
  
  code,
@@ -98,12 +101,11 @@
    box-shadow: var(--board-shadow);
    transition: transform var(--duration-normal) var(--ease-out);
    
-   /* FIX: make board responsive on mobile
-      - Constrains board to 90% of viewport width on small screens
-      - Max 480px on desktop
-      - Uses clamp() for smooth scaling across all screen sizes
-   */
-   --board-size: clamp(250px, 90vw, 480px);
+   /* FIX: make board responsive on all screens
+       - Constrains board to smaller of viewport width or height
+       - Max 480px on desktop
+    */
+   --board-size: clamp(200px, min(85vw, 65vh), 500px);
    width: var(--board-size);
    height: var(--board-size);
  }

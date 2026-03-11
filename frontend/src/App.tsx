@@ -19,7 +19,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <Router>
-        <div className="App min-h-screen bg-gray-900 text-white">
+        <div className="App h-screen overflow-hidden bg-gray-900 text-white flex flex-col">
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/game/:gameId" element={<GamePage />} />
