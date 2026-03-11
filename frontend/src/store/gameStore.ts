@@ -40,11 +40,38 @@ export interface CurrentGame {
   result?:       string;
   moves:         MoveRecord[];
   gameStatus:    GameStatus;
+  pickUpLine?:   string;
+}
+
+export interface User {
+  id: string;
+  username: string;
+  email: string;
+  gender: 'male' | 'female';
+  role: 'user' | 'admin';
+  credits: number;
+  gamesPlayedInCredit: number;
+  lastCreditRegen: string;
+  stats: {
+    gamesPlayed: number;
+    wins: number;
+    losses: number;
+    draws: number;
+    winStreak: number;
+    maxWinStreak: number;
+  };
+  achievements: Array<{
+    name: string;
+    description: string;
+    unlockedAt: string;
+  }>;
 }
 
 // ─── Store interface ──────────────────────────────────────────────────────────
 
 interface GameStore {
+  user:           User | null;
+  token:          string | null;
   isInQueue:      boolean;
   selectedGender: 'male' | 'female' | null;
   queueStats:     { male: number; female: number; total: number } | null;
@@ -52,11 +79,16 @@ interface GameStore {
   chatMessages:   ChatMessage[];
   isConnected:    boolean;
   error:          string | null;
+  rematchStatus:  'none' | 'requested' | 'received' | 'declined';
 
+  setUser:           (user: User | null) => void;
+  setToken:          (token: string | null) => void;
   setInQueue:        (inQueue: boolean) => void;
   setSelectedGender: (gender: 'male' | 'female' | null) => void;
   setQueueStats:     (stats: { male: number; female: number; total: number } | null) => void;
   setCurrentGame:    (game: CurrentGame | null) => void;
+  setRematchStatus:  (status: 'none' | 'requested' | 'received' | 'declined') => void;
+  updateBoard:    (board: string, move?: MoveRecord, gameStatus?: GameStatus) => void;
   /**
    * FIX: updateBoard now accepts an optional move record and gameStatus so
    * board, move history, and status are updated atomically in one set() call.
@@ -75,8 +107,10 @@ interface GameStore {
 
 const initialState: Pick<
   GameStore,
-  'isInQueue' | 'selectedGender' | 'queueStats' | 'currentGame' | 'chatMessages' | 'isConnected' | 'error'
+  'user' | 'token' | 'isInQueue' | 'selectedGender' | 'queueStats' | 'currentGame' | 'chatMessages' | 'isConnected' | 'error' | 'rematchStatus'
 > = {
+  user:           null,
+  token:          localStorage.getItem('token'),
   isInQueue:      false,
   selectedGender: null,
   queueStats:     null,
@@ -84,6 +118,7 @@ const initialState: Pick<
   chatMessages:   [],
   isConnected:    false,
   error:          null,
+  rematchStatus:  'none',
 };
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -93,10 +128,17 @@ export const useGameStore = create<GameStore>()(
     (set) => ({
       ...initialState,
 
+      setUser:           (user)           => set({ user }),
+      setToken:          (token)          => {
+        if (token) localStorage.setItem('token', token);
+        else localStorage.removeItem('token');
+        set({ token });
+      },
       setInQueue:        (isInQueue)      => set({ isInQueue }),
       setSelectedGender: (selectedGender) => set({ selectedGender }),
       setQueueStats:     (queueStats)     => set({ queueStats }),
       setCurrentGame:    (currentGame)    => set({ currentGame }),
+      setRematchStatus:  (rematchStatus)  => set({ rematchStatus }),
 
       updateBoard: (board, move, gameStatus) =>
         set((state) => {

@@ -17,6 +17,8 @@ const chatSocket        = require('./sockets/chatSocket');
 const matchmakingService          = require('./services/matchmakingService');
 const gameManager                 = require('./services/gameManager');
 const { redisClient, connectRedis } = require('./redis/redisClient');
+const { sequelize, User }         = require('./models');
+const jwt                         = require('jsonwebtoken');
 
 // ─── Global Error Handlers ────────────────────────────────────────────────────
 
@@ -101,6 +103,12 @@ app.use(helmet({
 app.use(cors({ origin: checkOrigin, credentials: true }));
 app.use(express.json());
 
+// ─── API Routes ───────────────────────────────────────────────────────────────
+
+app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/admin', require('./routes/adminRoutes'));
+app.use('/api/user', require('./routes/userRoutes'));
+
 // ─── Health / debug endpoints ─────────────────────────────────────────────────
 
 app.get('/health', (_req, res) => {
@@ -126,6 +134,12 @@ app.get('/debug', (_req, res) => {
 connectRedis().catch((err) => {
   console.error('❌ Failed to connect to Redis:', err.message);
 });
+
+// ─── Database (PostgreSQL) ───────────────────────────────────────────────────
+
+sequelize.sync({ alter: true })
+  .then(() => console.log('✅ PostgreSQL connected and synced'))
+  .catch(err => console.error('❌ PostgreSQL connection error:', err));
 
 // ─── Frontend static files ────────────────────────────────────────────────────
 
@@ -181,6 +195,25 @@ if (fs.existsSync(path.join(staticPath, 'index.html'))) {
 }
 
 // ─── Socket connection handling ───────────────────────────────────────────────
+
+io.use(async (socket, next) => {
+  const token = socket.handshake.auth.token || socket.handshake.query.token;
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key');
+      const user = await User.findByPk(decoded.id);
+      if (user) {
+        socket.user = user;
+        return next();
+      }
+    } catch (err) {
+      console.error('Socket Auth Error:', err.message);
+    }
+  }
+  // For now, allow unauthenticated connections but mark them as guests
+  socket.user = null;
+  next();
+});
 
 io.on('connection', (socket) => {
   console.log(`🔌 Connected: ${socket.id} via ${socket.conn.transport.name} (total: ${io.engine.clientsCount})`);

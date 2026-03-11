@@ -2,6 +2,9 @@
 
 const { Chess } = require('chess.js');
 const { redisClient } = require('../redis/redisClient');
+const { User, Game } = require('../models');
+const creditSystem = require('../utils/creditSystem');
+const achievementSystem = require('../utils/achievementSystem');
 
 /** @typedef {{ white: string, black: string }} Players */
 /** @typedef {'active'|'finished'} GameStatus */
@@ -103,6 +106,68 @@ class GameManager {
   }
 
   /**
+   * Update user stats and check achievements when a game ends.
+   * 
+   * @param {GameState} gameState 
+   */
+  async _updateUserStats(gameState, io) {
+    try {
+      const { white: whiteId, black: blackId } = gameState.userIds;
+      const whiteUser = await User.findByPk(whiteId);
+      const blackUser = await User.findByPk(blackId);
+
+      if (!whiteUser || !blackUser) return;
+
+      // Update basic stats
+      whiteUser.gamesPlayed += 1;
+      blackUser.gamesPlayed += 1;
+
+      if (gameState.winner === 'white') {
+        whiteUser.wins += 1;
+        whiteUser.winStreak += 1;
+        whiteUser.maxWinStreak = Math.max(whiteUser.maxWinStreak, whiteUser.winStreak);
+        
+        blackUser.losses += 1;
+        blackUser.winStreak = 0;
+      } else if (gameState.winner === 'black') {
+        blackUser.wins += 1;
+        blackUser.winStreak += 1;
+        blackUser.maxWinStreak = Math.max(blackUser.maxWinStreak, blackUser.winStreak);
+        
+        whiteUser.losses += 1;
+        whiteUser.winStreak = 0;
+      } else {
+        whiteUser.draws += 1;
+        whiteUser.winStreak = 0;
+        blackUser.draws += 1;
+        blackUser.winStreak = 0;
+      }
+
+      await whiteUser.save();
+      await blackUser.save();
+
+      // Check achievements
+      if (gameState.winner === 'white') {
+        if (gameState.result === 'checkmate') {
+          const unlocked = await achievementSystem.checkAchievements(whiteUser, 'checkmate');
+          if (unlocked.length > 0) io.to(gameState.players.white).emit('achievement_unlocked', { achievements: unlocked });
+        }
+        const unlocked = await achievementSystem.checkAchievements(whiteUser, 'win');
+        if (unlocked.length > 0) io.to(gameState.players.white).emit('achievement_unlocked', { achievements: unlocked });
+      } else if (gameState.winner === 'black') {
+        if (gameState.result === 'checkmate') {
+          const unlocked = await achievementSystem.checkAchievements(blackUser, 'checkmate');
+          if (unlocked.length > 0) io.to(gameState.players.black).emit('achievement_unlocked', { achievements: unlocked });
+        }
+        const unlocked = await achievementSystem.checkAchievements(blackUser, 'win');
+        if (unlocked.length > 0) io.to(gameState.players.black).emit('achievement_unlocked', { achievements: unlocked });
+      }
+    } catch (err) {
+      console.error('Error updating user stats:', err);
+    }
+  }
+
+  /**
    * Determine draw reason from a finished Chess instance.
    *
    * @param {Chess} chess
@@ -121,7 +186,7 @@ class GameManager {
    * Create a new game, persist to Redis, and prime the in-memory cache.
    *
    * @param {string} gameId
-   * @param {{ white: { socketId: string }, black: { socketId: string } }} players
+   * @param {{ white: { socketId: string, userId?: string }, black: { socketId: string, userId?: string } }} players
    * @returns {Promise<GameState>}
    */
   async createGame(gameId, players) {
@@ -135,6 +200,10 @@ class GameManager {
           white: players.white.socketId,
           black: players.black.socketId,
         },
+        userIds: {
+          white: players.white.userId || null,
+          black: players.black.userId || null
+        },
         board:        chess.fen(),
         status:       'active',
         moves:        [],
@@ -144,6 +213,26 @@ class GameManager {
       };
 
       await this._save(gameId, gameState);
+
+      // Persist to PostgreSQL
+      if (gameState.userIds.white && gameState.userIds.black) {
+        await Game.create({
+          gameId,
+          whitePlayerId: gameState.userIds.white,
+          blackPlayerId: gameState.userIds.black,
+          status: 'active',
+          moves: [],
+          chatMessages: [],
+          startedAt: new Date()
+        });
+
+        // Deduct credits for both players
+        const whiteUser = await User.findByPk(gameState.userIds.white);
+        const blackUser = await User.findByPk(gameState.userIds.black);
+        
+        if (whiteUser) await creditSystem.deductGame(whiteUser);
+        if (blackUser) await creditSystem.deductGame(blackUser);
+      }
 
       this.games.set(gameId, {
         chess,
@@ -235,7 +324,7 @@ class GameManager {
    * @param {string|null} [promotion]
    * @returns {Promise<{ move: object, gameState: GameState }>}
    */
-  async makeMove(gameId, from, to, promotion = null) {
+  async makeMove(gameId, from, to, promotion = null, io) {
     try {
       // 1. Ensure cache is populated (re-hydrates from Redis if needed).
       let gameState = await this.getGameState(gameId);
@@ -291,6 +380,27 @@ class GameManager {
       // 5. Persist.
       await this._save(gameId, gameState);
 
+      // Sync with PostgreSQL
+      if (gameState.userIds && gameState.userIds.white && gameState.userIds.black) {
+        const gameUpdate = {
+          moves: gameState.moves,
+          status: gameState.status,
+          result: gameState.result || null,
+          winnerId: gameState.winner ? (gameState.winner === 'white' ? gameState.userIds.white : gameState.userIds.black) : null
+        };
+
+        if (gameState.status === 'finished') {
+          gameUpdate.endedAt = new Date();
+        }
+
+        await Game.update(gameUpdate, { where: { gameId } });
+
+        // Update stats and achievements if game finished
+        if (gameState.status === 'finished') {
+          await this._updateUserStats(gameState, io);
+        }
+      }
+
       return { move, gameState };
     } catch (err) {
       console.error('makeMove error:', err);
@@ -317,6 +427,22 @@ class GameManager {
       gameState.chatMessages.push(chatMessage);
 
       await this._save(gameId, gameState);
+
+      // Sync with PostgreSQL
+      if (gameState.userIds) {
+        await Game.update(
+          { chatMessages: gameState.chatMessages },
+          { where: { gameId } }
+        );
+
+        // Update total message count for user
+        const user = await User.findByPk(playerId);
+        if (user) {
+          user.totalMessages += 1;
+          await user.save();
+          await achievementSystem.checkAchievements(user, 'message');
+        }
+      }
 
       return chatMessage;
     } catch (err) {

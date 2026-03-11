@@ -2,12 +2,37 @@
 
 const matchmakingService = require('../services/matchmakingService');
 const gameManager        = require('../services/gameManager');
+const aiService          = require('../services/aiService');
+const creditSystem       = require('../utils/creditSystem');
 
 function matchmakingSocket(socket, io) {
 
   socket.on('select_gender', async (data) => {
     try {
       const { gender } = data;
+
+      if (!socket.user) {
+        socket.emit('error', { message: 'Please sign in to play' });
+        return;
+      }
+
+      // Regenerate credits before checking
+      await creditSystem.regenerateCredits(socket.user);
+
+      if (!creditSystem.canPlay(socket.user)) {
+        // Calculate remaining time for regen
+        const now = new Date();
+        const lastRegen = new Date(socket.user.lastCreditRegen);
+        const nextRegen = new Date(lastRegen.getTime() + (6 * 60 * 60 * 1000));
+        const diff = nextRegen - now;
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        
+        socket.emit('error', { 
+          message: `You have run out of credits. Please come back in ${hours}h ${minutes}m.` 
+        });
+        return;
+      }
 
       if (!['male', 'female'].includes(gender)) {
         socket.emit('error', { message: 'Invalid gender selection' });
@@ -16,10 +41,11 @@ function matchmakingSocket(socket, io) {
 
       console.log(`Player ${socket.id} selected gender: ${gender}`);
 
-      const match = await matchmakingService.addToQueue(socket.id, gender);
+      const match = await matchmakingService.addToQueue(socket.id, gender, socket.user.id);
 
       if (match) {
         const gameState = await gameManager.createGame(match.gameId, match.players);
+        const pickUpLine = await aiService.generateChessPickUpLine();
 
         const whiteSocketId = match.players.white.socketId;
         const blackSocketId = match.players.black.socketId;
@@ -33,6 +59,7 @@ function matchmakingSocket(socket, io) {
         const commonPayload = {
           gameId: match.gameId,
           board:  gameState.board,
+          pickUpLine,
           players: {
             white: whiteSocketId,
             black: blackSocketId,

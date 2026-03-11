@@ -29,8 +29,9 @@ export const useChessGame = () => {
    */
   const currentGame  = useGameStore((s) => s.currentGame);
   const chatMessages = useGameStore((s) => s.chatMessages);
-  // playerColor is a stable string ('white'|'black'|null) — safe as its own selector.
   const playerColor  = useGameStore((s) => s.currentGame?.playerColor ?? null);
+  const rematchStatus = useGameStore((s) => s.rematchStatus);
+  const setRematchStatus = useGameStore((s) => s.setRematchStatus);
 
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [possibleMoves,  setPossibleMoves]  = useState<string[]>([]);
@@ -74,6 +75,20 @@ export const useChessGame = () => {
       setIsLoadingMoves(false);
     };
   }, [selectedSquare, currentGame?.gameId]);
+
+  // ─── Rematch listeners ───────────────────────────────────────────────────
+  useEffect(() => {
+    const handleRematchRequested = () => setRematchStatus('received');
+    const handleRematchDeclined = () => setRematchStatus('declined');
+
+    socketService.on('rematch_requested', handleRematchRequested);
+    socketService.on('rematch_declined', handleRematchDeclined);
+
+    return () => {
+      socketService.off('rematch_requested', handleRematchRequested);
+      socketService.off('rematch_declined', handleRematchDeclined);
+    };
+  }, [setRematchStatus]);
 
   // ─── makeMove ─────────────────────────────────────────────────────────────
   const makeMove = useCallback(
@@ -144,6 +159,24 @@ export const useChessGame = () => {
   }, []);
 
   // ─── Public interface ──────────────────────────────────────────────────────
+  const requestRematch = useCallback(() => {
+    if (!currentGame) return;
+    socketService.emit('request_rematch', { gameId: currentGame.gameId });
+    setRematchStatus('requested');
+  }, [currentGame, setRematchStatus]);
+
+  const acceptRematch = useCallback(() => {
+    if (!currentGame) return;
+    socketService.emit('accept_rematch', { gameId: currentGame.gameId });
+    setRematchStatus('none');
+  }, [currentGame, setRematchStatus]);
+
+  const declineRematch = useCallback(() => {
+    if (!currentGame) return;
+    socketService.emit('decline_rematch', { gameId: currentGame.gameId });
+    setRematchStatus('none');
+  }, [currentGame, setRematchStatus]);
+
   return {
     currentGame,
     chatMessages,
@@ -151,10 +184,14 @@ export const useChessGame = () => {
     selectedSquare,
     possibleMoves,
     isLoadingMoves,
+    rematchStatus,
     selectSquare,
     makeMove,
     resignGame,
     requestNewGame,
     sendMessage,
-  } as const;
+    requestRematch,
+    acceptRematch,
+    declineRematch,
+  };
 };

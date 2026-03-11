@@ -2,6 +2,7 @@
 
 const gameManager  = require('../services/gameManager');
 const chessService = require('../services/chessService');
+const aiService    = require('../services/aiService');
 
 /**
  * Attach all chess-game socket event handlers to a single socket.
@@ -93,7 +94,7 @@ function gameSocket(socket, io) {
       }
 
       // Apply move — throws on illegal move or invalid game state.
-      const result = await gameManager.makeMove(gameId, from, to, promotion);
+      const result = await gameManager.makeMove(gameId, from, to, promotion, io);
       const { move, gameState } = result;
 
       // Derive status once from the authoritative post-move state.
@@ -231,6 +232,87 @@ function gameSocket(socket, io) {
     } catch (err) {
       console.error('get_possible_moves error:', err);
       emitError('get_possible_moves', 'Failed to get possible moves');
+    }
+  });
+
+  // ─── rematch ────────────────────────────────────────────────────────────
+
+  socket.on('request_rematch', async (data) => {
+    try {
+      const { gameId } = data ?? {};
+      if (!gameId) return;
+
+      const gameState = await gameManager.getGameState(gameId);
+      if (!gameState) return;
+
+      socket.to(gameId).emit('rematch_requested', { from: socket.id });
+    } catch (err) {
+      console.error('request_rematch error:', err);
+    }
+  });
+
+  socket.on('accept_rematch', async (data) => {
+    try {
+      const { gameId } = data ?? {};
+      if (!gameId) return;
+
+      const gameState = await gameManager.getGameState(gameId);
+      if (!gameState) return;
+
+      // Clean up old game and start new one with same players
+      const players = {
+        white: { socketId: gameState.players.black, userId: gameState.userIds.black },
+        black: { socketId: gameState.players.white, userId: gameState.userIds.white }
+      };
+      
+      // Generate new game ID for rematch
+      const newGameId = `game_${Date.now()}_rematch`;
+      const newGameState = await gameManager.createGame(newGameId, players);
+      const pickUpLine = await aiService.generateChessPickUpLine();
+
+      // Join both sockets to new room
+      const opponentSocketId = socket.id === players.white.socketId ? players.black.socketId : players.white.socketId;
+      const opponentSocket = io.sockets.sockets.get(opponentSocketId);
+      
+      socket.join(newGameId);
+      if (opponentSocket) opponentSocket.join(newGameId);
+
+      const commonPayload = {
+        gameId: newGameId,
+        board: newGameState.board,
+        pickUpLine,
+        players: {
+          white: players.white.socketId,
+          black: players.black.socketId,
+        },
+      };
+
+      io.to(players.white.socketId).emit('game_start', {
+        ...commonPayload,
+        playerColor: 'white',
+        opponentColor: 'black',
+      });
+
+      io.to(players.black.socketId).emit('game_start', {
+        ...commonPayload,
+        playerColor: 'black',
+        opponentColor: 'white',
+      });
+
+      // Cleanup old game room
+      socket.leave(gameId);
+      if (opponentSocket) opponentSocket.leave(gameId);
+      await gameManager.cleanupGame(gameId);
+
+    } catch (err) {
+      console.error('accept_rematch error:', err);
+    }
+  });
+
+  socket.on('decline_rematch', async (data) => {
+    const { gameId } = data ?? {};
+    if (gameId) {
+      socket.to(gameId).emit('rematch_declined');
     }
   });
 

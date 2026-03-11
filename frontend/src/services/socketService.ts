@@ -33,6 +33,8 @@ class SocketService {
 
     console.log(`🔌 Socket: Initializing connection... (Target: ${backendUrl})`);
 
+    const token = localStorage.getItem('token');
+
     this.socket = io(backendUrl, {
       transports: ['websocket', 'polling'],
       timeout: 20_000,
@@ -41,6 +43,7 @@ class SocketService {
       reconnectionDelay: 1_000,
       reconnectionDelayMax: 5_000,
       secure: window.location.protocol === 'https:',
+      auth: { token }
     });
 
     this.setupEventListeners();
@@ -63,6 +66,10 @@ class SocketService {
 
   off<T = unknown>(event: string, handler: (data: T) => void): void {
     this.socket?.off(event, handler);
+  }
+
+  emit<T = unknown>(event: string, data?: T): void {
+    this.socket?.emit(event, data);
   }
 
   // ─── Internal event listeners ─────────────────────────────────────────────

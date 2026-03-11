@@ -7,7 +7,7 @@ class MatchmakingService {
   }
 
   // Add player to matchmaking queue
-  async addToQueue(socketId, gender) {
+  async addToQueue(socketId, gender, userId = null) {
     try {
       // Prevent duplicate entries in the same queue or opposite queue
       await this.removeFromQueue(socketId);
@@ -18,6 +18,7 @@ class MatchmakingService {
       await redisClient.rPush(queue, JSON.stringify({
         socketId,
         gender,
+        userId,
         joinedAt: Date.now()
       }));
 
