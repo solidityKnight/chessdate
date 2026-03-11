@@ -48,7 +48,7 @@ function checkOrigin(origin, callback) {
   if (!origin) return callback(null, true);
 
   const isRailway = origin.includes('railway.app') || origin.includes('up.railway.app');
-  const isCustom  = origin.includes('chessdate.in');
+  const isCustom  = origin.includes('chessdate.in') || origin.includes('www.chessdate.in');
   const isLocal   = process.env.NODE_ENV !== 'production' && (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:'));
   const isExplicit = process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL;
 
