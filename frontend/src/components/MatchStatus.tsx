@@ -51,17 +51,29 @@ const MatchStatus: React.FC = () => {
     );
   }
 
+  const currentTurn = currentGame.board.split(' ')[1]; // 'w' or 'b'
+  const isMyTurn = (playerColor === 'white' && currentTurn === 'w') || 
+                   (playerColor === 'black' && currentTurn === 'b');
+
   return (
-    <div className="game-status active">
-      <p className="text-lg font-semibold">
-        Playing as {currentGame.playerColor === 'white' ? 'White ♔' : 'Black ♚'}
-      </p>
-      <p className="text-sm opacity-90">
+    <div className={`game-status active w-full max-w-lg transition-colors ${isMyTurn ? 'bg-blue-900/50 border-blue-500' : 'bg-gray-800/50 border-gray-700'}`}>
+      <div className="flex justify-between items-center mb-1">
+        <p className="text-sm sm:text-lg font-bold">
+          {playerColor === 'white' ? 'White ♔' : 'Black ♚'} (You)
+        </p>
+        {isMyTurn && (
+          <span className="bg-blue-500 text-white text-[10px] sm:text-xs px-2 py-0.5 rounded-full animate-pulse uppercase tracking-wider font-black">
+            Your Turn
+          </span>
+        )}
+      </div>
+      <p className="text-[10px] sm:text-xs text-gray-400">
         Opponent: {currentGame.opponentColor === 'white' ? 'White ♔' : 'Black ♚'}
       </p>
-      <p className="text-xs opacity-75 mt-1">
-        Game ID: {currentGame.gameId}
-      </p>
+      <div className="mt-1 flex justify-between items-center opacity-40">
+        <p className="text-[8px] sm:text-[10px] truncate max-w-[120px]">ID: {currentGame.gameId}</p>
+        <p className="text-[8px] sm:text-[10px]">Status: {currentGame.gameStatus.status}</p>
+      </div>
     </div>
   );
 };
