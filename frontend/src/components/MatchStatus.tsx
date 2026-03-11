@@ -51,6 +51,7 @@ const MatchStatus: React.FC = () => {
     );
   }
 
+  const playerColor = currentGame.playerColor;
   const currentTurn = currentGame.board.split(' ')[1]; // 'w' or 'b'
   const isMyTurn = (playerColor === 'white' && currentTurn === 'w') || 
                    (playerColor === 'black' && currentTurn === 'b');
