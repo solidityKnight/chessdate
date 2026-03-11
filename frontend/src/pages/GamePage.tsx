@@ -50,36 +50,36 @@ const GamePage: React.FC = () => {
       <div className="max-w-7xl mx-auto w-full flex-1 flex flex-col min-h-0">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-6 flex-1 min-h-0">
           {/* Chess Board - Takes up 2 columns on large screens */}
-          <div className="lg:col-span-2 flex justify-center items-center min-h-0 lg:h-full">
-            <div className="bg-gray-800 rounded-lg p-2 sm:p-4 border border-gray-700 w-full lg:w-auto flex flex-col items-center min-h-0 overflow-hidden shadow-2xl">
-              <div className="flex justify-center mb-1 sm:mb-2 shrink-0">
+          <div className="lg:col-span-2 flex justify-center lg:items-center min-h-0 lg:h-full">
+            <div className="bg-gray-800 rounded-lg p-3 sm:p-6 border border-gray-700 w-full lg:w-auto flex flex-col items-center lg:max-h-full min-h-0 shadow-2xl relative">
+              <div className="w-full flex justify-center mb-3 sm:mb-4 shrink-0 pt-2 lg:pt-0">
                 <MatchStatus />
               </div>
               
               {/* Ensure board doesn't shrink on mobile when chat grows */}
-              <div className="flex justify-center flex-1 min-h-[300px] sm:min-h-[400px] lg:min-h-0 w-full overflow-hidden">
+              <div className="flex justify-center flex-1 min-h-[320px] sm:min-h-[450px] lg:min-h-0 w-full">
                 <div className="aspect-square max-h-full h-full flex items-center justify-center">
                   <ChessBoard />
                 </div>
               </div>
               
-              <div className="mt-2 sm:mt-3 shrink-0">
+              <div className="mt-4 sm:mt-6 shrink-0 pb-2 lg:pb-0">
                 <GameControls />
               </div>
             </div>
           </div>
 
           {/* Chat - Takes up 1 column on large screens */}
-          <div className="lg:col-span-1 flex flex-col min-h-[350px] lg:min-h-0 lg:h-full">
+          <div className="lg:col-span-1 flex flex-col min-h-[400px] lg:min-h-0 lg:h-full">
             <ChatBox />
           </div>
         </div>
 
         {/* Game Info Footer */}
-        <div className="mt-2 py-2 text-center text-gray-500 text-[9px] sm:text-[10px] shrink-0 opacity-40">
+        <div className="mt-4 py-2 text-center text-gray-500 text-[10px] sm:text-xs shrink-0 opacity-40">
           <p>ChessDate • Real-time chess with matchmaking</p>
           {currentGame && (
-            <p className="mt-0.5">
+            <p className="mt-1">
               Game: {currentGame.gameId} • Status: {currentGame.status}
             </p>
           )}
