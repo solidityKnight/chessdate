@@ -73,7 +73,7 @@ const MatchStatus: React.FC = () => {
       </p>
       <div className="mt-1 flex justify-between items-center opacity-40">
         <p className="text-[8px] sm:text-[10px] truncate max-w-[120px]">ID: {currentGame.gameId}</p>
-        <p className="text-[8px] sm:text-[10px]">Status: {currentGame.gameStatus.status}</p>
+        <p className="text-[8px] sm:text-[10px]">Status: {currentGame.gameStatus?.status || 'active'}</p>
       </div>
     </div>
   );

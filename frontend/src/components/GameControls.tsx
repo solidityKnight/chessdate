@@ -33,13 +33,16 @@ const GameControls: React.FC = () => {
   if (!currentGame) return null;
 
   const isGameOver = currentGame.status === 'finished' || 
-    ['checkmate', 'stalemate', 'draw'].includes(currentGame.gameStatus.status);
+    ['checkmate', 'stalemate', 'draw'].includes(currentGame.gameStatus?.status || '');
+
+  const displayPickUpLine = currentGame.pickUpLine || (window as any)._lastPickUpLine;
+  if (currentGame.pickUpLine) (window as any)._lastPickUpLine = currentGame.pickUpLine;
 
   return (
     <div className="flex flex-col items-center space-y-4 w-full">
       {/* AI Pick-up Line (only at start or when active) */}
       <AnimatePresence>
-        {currentGame.pickUpLine && !isGameOver && (
+        {displayPickUpLine && !isGameOver && (
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -48,7 +51,7 @@ const GameControls: React.FC = () => {
           >
             <MessageCircleHeart className="w-5 h-5 text-pink-500 shrink-0 mt-0.5" />
             <p className="text-pink-200 text-xs italic leading-relaxed">
-              "{currentGame.pickUpLine}"
+              "{displayPickUpLine}"
             </p>
           </motion.div>
         )}

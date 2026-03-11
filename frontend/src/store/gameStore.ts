@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
+import { devtools, persist } from 'zustand/middleware';
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -80,6 +80,7 @@ interface GameStore {
   isConnected:    boolean;
   error:          string | null;
   rematchStatus:  'none' | 'requested' | 'received' | 'declined';
+  isAuthLoading:  boolean;
 
   setUser:           (user: User | null) => void;
   setToken:          (token: string | null) => void;
@@ -88,7 +89,7 @@ interface GameStore {
   setQueueStats:     (stats: { male: number; female: number; total: number } | null) => void;
   setCurrentGame:    (game: CurrentGame | null) => void;
   setRematchStatus:  (status: 'none' | 'requested' | 'received' | 'declined') => void;
-  updateBoard:    (board: string, move?: MoveRecord, gameStatus?: GameStatus) => void;
+  setAuthLoading:    (isLoading: boolean) => void;
   /**
    * FIX: updateBoard now accepts an optional move record and gameStatus so
    * board, move history, and status are updated atomically in one set() call.
@@ -107,7 +108,7 @@ interface GameStore {
 
 const initialState: Pick<
   GameStore,
-  'user' | 'token' | 'isInQueue' | 'selectedGender' | 'queueStats' | 'currentGame' | 'chatMessages' | 'isConnected' | 'error' | 'rematchStatus'
+  'user' | 'token' | 'isInQueue' | 'selectedGender' | 'queueStats' | 'currentGame' | 'chatMessages' | 'isConnected' | 'error' | 'rematchStatus' | 'isAuthLoading'
 > = {
   user:           null,
   token:          localStorage.getItem('token'),
@@ -119,63 +120,76 @@ const initialState: Pick<
   isConnected:    false,
   error:          null,
   rematchStatus:  'none',
+  isAuthLoading:  !!localStorage.getItem('token'),
 };
 
 // ─── Store ────────────────────────────────────────────────────────────────────
 
 export const useGameStore = create<GameStore>()(
   devtools(
-    (set) => ({
-      ...initialState,
-
-      setUser:           (user)           => set({ user }),
-      setToken:          (token)          => {
-        if (token) localStorage.setItem('token', token);
-        else localStorage.removeItem('token');
-        set({ token });
-      },
-      setInQueue:        (isInQueue)      => set({ isInQueue }),
-      setSelectedGender: (selectedGender) => set({ selectedGender }),
-      setQueueStats:     (queueStats)     => set({ queueStats }),
-      setCurrentGame:    (currentGame)    => set({ currentGame }),
-      setRematchStatus:  (rematchStatus)  => set({ rematchStatus }),
-
-      updateBoard: (board, move, gameStatus) =>
-        set((state) => {
-          if (!state.currentGame) return state;
-          return {
-            currentGame: {
-              ...state.currentGame,
-              board,
-              ...(move       ? { moves: [...state.currentGame.moves, move] } : {}),
-              ...(gameStatus ? { gameStatus }                                : {}),
-            },
-          };
-        }),
-
-      setGameStatus: (status, winner, result) =>
-        set((state) => ({
-          currentGame: state.currentGame
-            ? { ...state.currentGame, status, winner, result }
-            : null,
-        })),
-
-      addChatMessage: (message) =>
-        set((state) => ({ chatMessages: [...state.chatMessages, message] })),
-
-      setConnected: (isConnected) => set({ isConnected }),
-      setError:     (error)       => set({ error }),
-      /**
-       * FIX: reset() now preserves the current connection state.
-       * When a game ends and the player requests a new match, we clear the game
-       * and matchmaking state, but the socket connection should remain active
-       * so the player can immediately rejoin matchmaking without a reconnection delay.
-       */
-      reset:        () => set((state) => ({
+    persist(
+      (set) => ({
         ...initialState,
-        isConnected: state.isConnected, // Preserve connection state
-      })),
-    }),
-    { name: 'game-store' },
+
+        setUser:           (user)           => set({ user, isAuthLoading: false }),
+        setToken:          (token)          => {
+          if (token) localStorage.setItem('token', token);
+          else localStorage.removeItem('token');
+          set({ token });
+        },
+        setInQueue:        (isInQueue)      => set({ isInQueue }),
+        setSelectedGender: (selectedGender) => set({ selectedGender }),
+        setQueueStats:     (queueStats)     => set({ queueStats }),
+        setCurrentGame:    (currentGame)    => set({ currentGame }),
+        setRematchStatus:  (rematchStatus)  => set({ rematchStatus }),
+        setAuthLoading:    (isAuthLoading)  => set({ isAuthLoading }),
+
+        updateBoard: (board, move, gameStatus) =>
+          set((state) => {
+            if (!state.currentGame) return state;
+            return {
+              currentGame: {
+                ...state.currentGame,
+                board,
+                ...(move       ? { moves: [...state.currentGame.moves, move] } : {}),
+                ...(gameStatus ? { gameStatus }                                : {}),
+              },
+            };
+          }),
+
+        setGameStatus: (status, winner, result) =>
+          set((state) => ({
+            currentGame: state.currentGame
+              ? { ...state.currentGame, status, winner, result }
+              : null,
+          })),
+
+        addChatMessage: (message) =>
+          set((state) => ({ chatMessages: [...state.chatMessages, message] })),
+
+        setConnected: (isConnected) => set({ isConnected }),
+        setError:     (error)       => set({ error }),
+        /**
+         * FIX: reset() now preserves the current connection state.
+         * When a game ends and the player requests a new match, we clear the game
+         * and matchmaking state, but the socket connection should remain active
+         * so the player can immediately rejoin matchmaking without a reconnection delay.
+         */
+        reset:        () => set((state) => ({
+          ...initialState,
+          isConnected: state.isConnected, // Preserve connection state
+          user: state.user, // Preserve user state
+          token: state.token, // Preserve token state
+        })),
+      }),
+      {
+        name: 'game-store',
+        partialize: (state) => ({ 
+          user: state.user, 
+          token: state.token, 
+          currentGame: state.currentGame 
+        }),
+      }
+    )
   ),
 );

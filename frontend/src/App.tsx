@@ -23,18 +23,33 @@ const queryClient = new QueryClient({
 });
 
 function App() {
-  const { user, token, setUser } = useGameStore();
+  const { user, token, setUser, isAuthLoading, setAuthLoading } = useGameStore();
 
   useEffect(() => {
     if (token && !user) {
+      setAuthLoading(true);
       api.get('/auth/me')
         .then(res => setUser(res.data))
         .catch(() => {
           localStorage.removeItem('token');
           useGameStore.getState().setToken(null);
+          setAuthLoading(false);
         });
+    } else if (!token) {
+      setAuthLoading(false);
     }
-  }, [token, user, setUser]);
+  }, [token, user, setUser, setAuthLoading]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="h-screen w-full flex items-center justify-center bg-gray-900 text-white">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mb-4"></div>
+          <p className="text-gray-400">Authenticating...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <QueryClientProvider client={queryClient}>

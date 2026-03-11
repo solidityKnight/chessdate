@@ -112,6 +112,7 @@ class SocketService {
       playerColor:   'white' | 'black';
       opponentColor: 'white' | 'black';
       board:         string;
+      pickUpLine?:   string;
       players?:      { white: string; black: string };
     }) => {
       useGameStore.getState().setInQueue(false);
@@ -142,6 +143,7 @@ class SocketService {
         status:     'active',
         moves:      [],
         gameStatus: { status: 'active' },
+        pickUpLine: data.pickUpLine,
       });
     });
 

@@ -114,9 +114,26 @@ const LandingPage: React.FC = () => {
                 </div>
               )}
             </div>
+          ) : !user ? (
+            <div className="text-center py-12 space-y-6">
+              <div className="bg-blue-500/10 p-6 rounded-2xl border border-blue-500/20">
+                <Heart className="w-12 h-12 text-blue-500 mx-auto mb-4 animate-bounce" />
+                <h3 className="text-xl font-bold text-white mb-2">Ready to find a match?</h3>
+                <p className="text-gray-400 text-sm mb-6">Sign in to start playing chess and matching with others!</p>
+                <Link 
+                  to="/login" 
+                  className="block w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-blue-600/20"
+                >
+                  Sign In to Play
+                </Link>
+              </div>
+              <p className="text-xs text-gray-500 italic">
+                New here? <Link to="/signup" className="text-pink-500 hover:underline">Create an account</Link> in seconds.
+              </p>
+            </div>
           ) : (
             <div className="space-y-6">
-              {user && user.credits === 0 && user.gamesPlayedInCredit === 0 ? (
+              {user.credits === 0 && user.gamesPlayedInCredit === 0 ? (
                 <div className="p-6 bg-red-900/20 border border-red-800 rounded-xl text-center space-y-3">
                   <Clock className="w-10 h-10 text-red-500 mx-auto" />
                   <h3 className="font-bold text-red-400">Out of Credits</h3>
@@ -142,14 +159,20 @@ const LandingPage: React.FC = () => {
 
           <div className="mt-8 text-center text-[10px] text-gray-500 space-y-2">
             <div className="flex justify-center space-x-4 mb-4">
-              <Link to="/profile" className="hover:text-white transition-colors flex items-center">
-                <User className="w-3 h-3 mr-1" /> Profile
-              </Link>
-              <Link to="/profile" className="hover:text-white transition-colors flex items-center">
-                <Trophy className="w-3 h-3 mr-1" /> Achievements
-              </Link>
+              {user ? (
+                <>
+                  <Link to="/profile" className="hover:text-white transition-colors flex items-center bg-gray-700/50 px-3 py-1.5 rounded-full border border-gray-600">
+                    <User className="w-3 h-3 mr-1 text-blue-400" /> Profile & Stats
+                  </Link>
+                  <Link to="/profile" className="hover:text-white transition-colors flex items-center bg-gray-700/50 px-3 py-1.5 rounded-full border border-gray-600">
+                    <Trophy className="w-3 h-3 mr-1 text-yellow-400" /> Achievements
+                  </Link>
+                </>
+              ) : (
+                <Link to="/login" className="text-blue-400 hover:underline">Sign in to track stats</Link>
+              )}
               {user?.role === 'admin' && (
-                <Link to="/admin" className="text-yellow-500 hover:text-yellow-400 transition-colors flex items-center">
+                <Link to="/admin" className="text-yellow-500 hover:text-yellow-400 transition-colors flex items-center bg-yellow-500/10 px-3 py-1.5 rounded-full border border-yellow-500/30">
                   <ShieldCheck className="w-3 h-3 mr-1" /> Admin
                 </Link>
               )}

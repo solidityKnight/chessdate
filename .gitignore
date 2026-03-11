@@ -9,6 +9,12 @@ build/
 dist/
 
 # Environment variables (we recommend setting these via the host rather than files)
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+*.env
 # The project defaults to sensible localhost values when none are present.
 
 # IDE
