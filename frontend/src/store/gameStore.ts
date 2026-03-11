@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { devtools, persist } from 'zustand/middleware';
+import { devtools, persist, createJSONStorage } from 'zustand/middleware';
+import { tokenStorage } from '../services/tokenStorage';
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -111,7 +112,7 @@ const initialState: Pick<
   'user' | 'token' | 'isInQueue' | 'selectedGender' | 'queueStats' | 'currentGame' | 'chatMessages' | 'isConnected' | 'error' | 'rematchStatus' | 'isAuthLoading'
 > = {
   user:           null,
-  token:          localStorage.getItem('token'),
+  token:          tokenStorage.get(),
   isInQueue:      false,
   selectedGender: null,
   queueStats:     null,
@@ -120,7 +121,7 @@ const initialState: Pick<
   isConnected:    false,
   error:          null,
   rematchStatus:  'none',
-  isAuthLoading:  !!localStorage.getItem('token'),
+  isAuthLoading:  !!tokenStorage.get(),
 };
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -133,8 +134,7 @@ export const useGameStore = create<GameStore>()(
 
         setUser:           (user)           => set({ user, isAuthLoading: false }),
         setToken:          (token)          => {
-          if (token) localStorage.setItem('token', token);
-          else localStorage.removeItem('token');
+          tokenStorage.set(token);
           set({ token });
         },
         setInQueue:        (isInQueue)      => set({ isInQueue }),
@@ -180,15 +180,21 @@ export const useGameStore = create<GameStore>()(
           isConnected: state.isConnected, // Preserve connection state
           user: state.user, // Preserve user state
           token: state.token, // Preserve token state
+          isAuthLoading: !!state.token && !state.user,
         })),
       }),
       {
-        name: 'game-store',
+        name: 'game-store-v3',
+        storage: createJSONStorage(() => sessionStorage),
         partialize: (state) => ({ 
           user: state.user, 
           token: state.token, 
           currentGame: state.currentGame 
         }),
+        // Ensure isAuthLoading is NOT persisted
+        onRehydrateStorage: () => (state) => {
+          if (state) state.setAuthLoading(!!state.token && !state.user);
+        }
       }
     )
   ),

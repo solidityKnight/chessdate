@@ -11,14 +11,31 @@ const defaultBackendUrl = (): string => {
   return trimTrailingSlash(window.location.origin);
 };
 
-const backendUrl = defaultBackendUrl();
+const backendUrlFromApiUrl = (): string | null => {
+  const apiUrl = process.env.REACT_APP_API_URL ? trimTrailingSlash(process.env.REACT_APP_API_URL) : null;
+  if (!apiUrl) return null;
+  return apiUrl.replace(/\/api$/i, '');
+};
+
+const backendUrl = process.env.REACT_APP_BACKEND_URL
+  ? trimTrailingSlash(process.env.REACT_APP_BACKEND_URL)
+  : (backendUrlFromApiUrl() || defaultBackendUrl());
 
 const apiUrl = process.env.REACT_APP_API_URL
   ? trimTrailingSlash(process.env.REACT_APP_API_URL)
   : `${backendUrl}/api`;
 
+const upgradeToHttpsIfNeeded = (url: string): string => {
+  if (typeof window === 'undefined') return url;
+  if (window.location.protocol !== 'https:') return url;
+  if (url.startsWith('https://')) return url;
+  if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) return url;
+  if (url.startsWith('http://')) return `https://${url.slice('http://'.length)}`;
+  return url;
+};
+
 export const envConfig = {
-  backendUrl,
-  apiUrl,
+  backendUrl: upgradeToHttpsIfNeeded(backendUrl),
+  apiUrl: upgradeToHttpsIfNeeded(apiUrl),
   appEnv: process.env.REACT_APP_ENV || 'development',
 };

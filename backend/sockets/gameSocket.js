@@ -153,19 +153,9 @@ function gameSocket(socket, io) {
       const guard = await guardActivePlayer(gameId, 'resign_game');
       if (!guard) return;
 
-      const { playerColor, gameState } = guard;
+      const { playerColor } = guard;
 
-      gameState.status = 'finished';
-      gameState.result = 'resignation';
-      gameState.winner = playerColor === 'white' ? 'black' : 'white';
-
-      // Persist through the manager's internal save helper.
-      // If GameManager later exposes a resignGame() method, call that instead.
-      await gameManager._save(gameId, gameState);
-
-      // Reflect finished status in the in-memory cache.
-      const cached = gameManager.games.get(gameId);
-      if (cached) cached.status = 'finished';
+      const gameState = await gameManager.resignGame(gameId, playerColor, io);
 
       io.to(gameId).emit('game_over', {
         winner:     gameState.winner,
@@ -174,7 +164,7 @@ function gameSocket(socket, io) {
         finalBoard: gameState.board,
       });
 
-      setTimeout(() => gameManager.cleanupGame(gameId), 5_000);
+      setTimeout(() => gameManager.cleanupGame(gameId), 60_000);
     } catch (err) {
       console.error('resign_game error:', err);
       emitError('resign_game', 'Failed to resign game');
@@ -254,15 +244,43 @@ function gameSocket(socket, io) {
   socket.on('accept_rematch', async (data) => {
     try {
       const { gameId } = data ?? {};
-      if (!gameId) return;
+      if (!gameId) {
+        emitError('accept_rematch', 'Missing required field: gameId');
+        return;
+      }
 
-      const gameState = await gameManager.getGameState(gameId);
-      if (!gameState) return;
+      const gameState = await gameManager.getGameState(gameId, true);
+      if (!gameState) {
+        emitError('accept_rematch', 'Game not found');
+        return;
+      }
+      if (!gameState.userIds?.white || !gameState.userIds?.black) {
+        emitError('accept_rematch', 'Game is missing player identities');
+        return;
+      }
 
-      // Clean up old game and start new one with same players
+      const findSocketByUserId = (userId) => {
+        for (const s of io.sockets.sockets.values()) {
+          if (s?.user?.id === userId) return s;
+        }
+        return null;
+      };
+
+      const nextWhiteUserId = gameState.userIds.black;
+      const nextBlackUserId = gameState.userIds.white;
+
+      const whiteSocket = findSocketByUserId(nextWhiteUserId) || io.sockets.sockets.get(gameState.players.black);
+      const blackSocket = findSocketByUserId(nextBlackUserId) || io.sockets.sockets.get(gameState.players.white);
+
+      if (!whiteSocket || !blackSocket) {
+        emitError('accept_rematch', 'Opponent is not connected');
+        return;
+      }
+
+      // Start new one with same players (swap colors for rematch)
       const players = {
-        white: { socketId: gameState.players.black, userId: gameState.userIds.black },
-        black: { socketId: gameState.players.white, userId: gameState.userIds.white }
+        white: { socketId: whiteSocket.id, userId: nextWhiteUserId },
+        black: { socketId: blackSocket.id, userId: nextBlackUserId }
       };
       
       // Generate new game ID for rematch
@@ -271,11 +289,8 @@ function gameSocket(socket, io) {
       const pickUpLine = await aiService.generateChessPickUpLine();
 
       // Join both sockets to new room
-      const opponentSocketId = socket.id === players.white.socketId ? players.black.socketId : players.white.socketId;
-      const opponentSocket = io.sockets.sockets.get(opponentSocketId);
-      
-      socket.join(newGameId);
-      if (opponentSocket) opponentSocket.join(newGameId);
+      whiteSocket.join(newGameId);
+      blackSocket.join(newGameId);
 
       const commonPayload = {
         gameId: newGameId,
@@ -300,12 +315,13 @@ function gameSocket(socket, io) {
       });
 
       // Cleanup old game room
-      socket.leave(gameId);
-      if (opponentSocket) opponentSocket.leave(gameId);
+      whiteSocket.leave(gameId);
+      blackSocket.leave(gameId);
       await gameManager.cleanupGame(gameId);
 
     } catch (err) {
       console.error('accept_rematch error:', err);
+      emitError('accept_rematch', 'Failed to start rematch');
     }
   });
 

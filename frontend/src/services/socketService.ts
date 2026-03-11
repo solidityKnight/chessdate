@@ -2,16 +2,34 @@ import { io, Socket } from 'socket.io-client';
 import { useGameStore } from '../store/gameStore';
 import type { MoveRecord, GameStatus, ChatMessage } from '../store/gameStore';
 import { envConfig } from '../config/env';
+import { tokenStorage } from './tokenStorage';
 
 class SocketService {
   private socket: Socket | null = null;
   private reconnectAttempts    = 0;
   private maxReconnectAttempts = 5;
+  private lastAuthToken: string | null = null;
 
   // ─── Connection ───────────────────────────────────────────────────────────
 
   connect(): Socket {
-    if (this.socket?.connected) return this.socket;
+    const token = tokenStorage.get() || useGameStore.getState().token;
+
+    if (this.socket) {
+      if (token !== this.lastAuthToken) {
+        this.lastAuthToken = token;
+        this.socket.auth = { token };
+        if (this.socket.connected) {
+          this.socket.disconnect();
+        }
+        this.socket.connect();
+        return this.socket;
+      }
+
+      this.socket.auth = { token };
+      if (!this.socket.connected) this.socket.connect();
+      return this.socket;
+    }
 
     /*
      * BUG FIX: the original tried several URL derivations but the most
@@ -26,14 +44,9 @@ class SocketService {
      *  - In local dev: if no REACT_APP_BACKEND_URL is set and we're on
      *    port 3000, override to port 4000 where the backend runs.
      */
-    const isLocalhost = window.location.hostname === 'localhost';
-    // For same-origin deployment, let socket.io determine the URL automatically.
-    // In production, we'll use window.location.origin to be explicit for the proxy.
-    const backendUrl  = isLocalhost ? envConfig.backendUrl : window.location.origin;
+    const backendUrl  = envConfig.backendUrl;
 
     console.log(`🔌 Socket: Initializing connection... (Target: ${backendUrl})`);
-
-    const token = localStorage.getItem('token');
 
     this.socket = io(backendUrl, {
       transports: ['websocket', 'polling'],
@@ -45,6 +58,7 @@ class SocketService {
       secure: window.location.protocol === 'https:',
       auth: { token }
     });
+    this.lastAuthToken = token;
 
     this.setupEventListeners();
     return this.socket;
@@ -88,7 +102,7 @@ class SocketService {
       console.log('❌ Disconnected, reason:', reason);
       useGameStore.getState().setConnected(false);
       if (reason === 'io server disconnect') {
-        this.socket?.connect();
+        useGameStore.getState().setError('Disconnected by server. Please refresh.');
       }
     });
 
@@ -117,6 +131,8 @@ class SocketService {
     }) => {
       useGameStore.getState().setInQueue(false);
       useGameStore.getState().setQueueStats(null);
+      useGameStore.getState().setRematchStatus('none');
+      useGameStore.setState({ chatMessages: [] });
 
       // Derive color from socket id when the players map is available.
       // This is the safest source of truth since the server now emits
@@ -190,8 +206,23 @@ class SocketService {
       data.messages.forEach((msg) => useGameStore.getState().addChatMessage(msg));
     });
 
-    this.socket.on('error', (data: { message: string }) => {
-      useGameStore.getState().setError(data.message);
+    this.socket.on('error', (data: { message?: string; event?: string }) => {
+      const message = data?.message || 'Unknown error';
+      useGameStore.getState().setError(message);
+
+      const gameId = useGameStore.getState().currentGame?.gameId;
+      const isGameRelated =
+        data?.event === 'get_possible_moves' ||
+        data?.event === 'make_move' ||
+        data?.event === 'resign_game' ||
+        data?.event === 'request_new_game' ||
+        message === 'You are not in this game' ||
+        message === 'Game not found';
+
+      if (gameId && isGameRelated) {
+        useGameStore.getState().reset();
+        useGameStore.getState().setError(null);
+      }
     });
 
     this.socket.on('invalid_move', (data: { error: string }) => {

@@ -1,401 +1,492 @@
-/*
- * BUG FIX: @import must come before ALL other rules — including @tailwind
- * directives. Placing it after @tailwind base/components/utilities causes
- * PostCSS / webpack to silently drop the import in many bundler configs,
- * breaking the entire custom stylesheet.
- */
- @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700&display=swap');
 
- @tailwind base;
- @tailwind components;
- @tailwind utilities;
- 
- /* ─── Design tokens ──────────────────────────────────────────────────────────── */
- 
- :root {
-   /* Board colours — Lichess-inspired warm wood palette */
-   --sq-light:           #f0d9b5;
-   --sq-dark:            #b58863;
- 
-   /* Highlight states */
-   --sq-selected:        #7fc97f;
-   --sq-selected-ring:   #4caf50;
-   --sq-possible:        rgba(20, 85, 30, 0.45);
-   --sq-capture-ring:    rgba(20, 85, 30, 0.55);
-   --sq-last-move:       rgba(255, 235, 59, 0.6);
-   --sq-check:           #e04e4e;
-   --sq-check-ring:      #b71c1c;
- 
-   /* Board chrome */
-   --board-border:       #704214;
-   --board-shadow:       0 8px 32px rgba(0, 0, 0, 0.45);
-   --coord-color-light:  #b58863;
-   --coord-color-dark:   #f0d9b5;
- 
-   /*
-    * Piece colours.
-    * BUG FIX: the original had NO color rules on .piece, so all Unicode chess
-    * symbols inherited body color (#f9fafb — near white), making every piece
-    * appear white regardless of side.
-    */
-   --piece-white:        #ffffff;
-   --piece-white-shadow: #5a3a1a;   /* dark outline keeps white pieces visible on light squares */
-   --piece-black:        #1a1a1a;
-   --piece-black-shadow: #f0d9b5;   /* light outline keeps dark pieces visible on dark squares */
- 
-   /* Chat */
-   --chat-own-bg:        #1d4ed8;
-   --chat-opponent-bg:   #374151;
-   --chat-system-bg:     #1f2937;
- 
-   /* Status badges */
-   --status-waiting-bg:  #78350f;
-   --status-waiting-fg:  #fde68a;
-   --status-active-bg:   #064e3b;
-   --status-active-fg:   #6ee7b7;
-   --status-finished-bg: #7f1d1d;
-   --status-finished-fg: #fca5a5;
- 
-   /* Typography */
-   --font-ui:   'DM Sans', ui-sans-serif, system-ui, sans-serif;
-   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
- 
-   /* Motion */
-   --duration-fast:   120ms;
-   --duration-normal: 220ms;
-   --ease-out:        cubic-bezier(0.22, 1, 0.36, 1);
- }
- 
- /* ─── Base reset ─────────────────────────────────────────────────────────────── */
- 
- *,
- *::before,
- *::after {
-   box-sizing: border-box;
- }
- 
- html,
- body,
- #root {
-   margin: 0;
-   padding: 0;
-   min-height: 100vh;
-   min-height: 100dvh;
-   width: 100vw;
- }
- 
- /* Desktop only: lock scrolling */
- @media (min-width: 1024px) {
-   html,
-   body,
-   #root {
-     height: 100vh;
-     height: 100dvh;
-     overflow: hidden !important;
-     position: fixed;
-     top: 0;
-     left: 0;
-   }
- }
- 
- body {
-   font-family: var(--font-ui);
-   background-color: #111827;
-   color: #f9fafb;
-   -webkit-font-smoothing: antialiased;
-   -moz-osx-font-smoothing: grayscale;
- }
- 
- code,
- pre {
-   font-family: var(--font-mono);
- }
- 
- /* ─── Board wrapper ───────────────────────────────────────────────────────────── */
- 
- .chess-board-wrapper {
-   position: relative;
-   display: inline-block;
-   border: 6px solid var(--board-border);
-   border-radius: 4px;
-   box-shadow: var(--board-shadow);
-   transition: transform var(--duration-normal) var(--ease-out);
-   
-   /* FIX: make board responsive on all screens
-       - Constrains board to smaller of viewport width or height
-       - Max 480px on desktop
-    */
-   --board-size: clamp(200px, min(85vw, 65vh), 500px);
-   width: var(--board-size);
-   height: var(--board-size);
- }
- 
- .chess-board {
-   display: grid;
-   grid-template-columns: repeat(8, 1fr);
-   grid-template-rows: repeat(8, 1fr);
-   width: 100%;
-   height: 100%;
- }
- 
- /* ─── Individual squares ─────────────────────────────────────────────────────── */
- 
- .chess-square {
-   position: relative;
-   display: flex;
-   align-items: center;
-   justify-content: center;
-   cursor: pointer;
-   transition:
-     filter        var(--duration-fast) var(--ease-out),
-     outline-color var(--duration-fast) var(--ease-out);
-   outline: 2px solid transparent;
-   outline-offset: -2px;
-   user-select: none;
-   
-   /* FIX: maintain square aspect ratio and responsive sizing */
-   aspect-ratio: 1;
- }
- 
- .chess-square:focus-visible {
-   outline-color: #facc15;
-   z-index: 1;
- }
- 
- .chess-square.light,
- .chess-square.white {
-   background-color: var(--sq-light);
- }
- 
- .chess-square.light:hover,
- .chess-square.white:hover {
-   filter: brightness(0.93);
- }
- 
- .chess-square.dark,
- .chess-square.black {
-   background-color: var(--sq-dark);
- }
- 
- .chess-square.dark:hover,
- .chess-square.black:hover {
-   filter: brightness(1.1);
- }
- 
- /* ─── Highlight states ───────────────────────────────────────────────────────── */
- 
- .chess-square.selected {
-   background-color: var(--sq-selected);
-   outline-color:    var(--sq-selected-ring);
- }
- 
- .chess-square.last-move {
-   background-color: var(--sq-last-move);
- }
- 
- .move-dot {
-   position: absolute;
-   width:  clamp(10px, 4vw, 22px);
-   height: clamp(10px, 4vw, 22px);
-   background-color: var(--sq-possible);
-   border-radius: 50%;
-   pointer-events: none;
-   animation: dot-pop var(--duration-normal) var(--ease-out) both;
- }
- 
- .capture-ring {
-   position: absolute;
-   inset: 0;
-   border-radius: 50%;
-   border: clamp(2px, 0.5vw, 4px) solid var(--sq-capture-ring);
-   pointer-events: none;
-   animation: dot-pop var(--duration-normal) var(--ease-out) both;
- }
- 
- @keyframes dot-pop {
-   from { opacity: 0; transform: scale(0.5); }
-   to   { opacity: 1; transform: scale(1);   }
- }
- 
- .chess-square.in-check {
-   background-color: var(--sq-check);
-   outline-color:    var(--sq-check-ring);
- }
- 
- /* ─── Coordinate labels ──────────────────────────────────────────────────────── */
- 
- .coord-label {
-   position: absolute;
-   font-size: clamp(0.5rem, 2vw, 0.75rem);
-   font-weight: 600;
-   line-height: 1;
-   pointer-events: none;
-   user-select: none;
-   color: var(--coord-color-light);
- }
- 
- .rank-label { top: 3px;    left: 3px; }
- .file-label { bottom: 3px; right: 4px; }
- 
- .chess-square.dark  .coord-label,
- .chess-square.black .coord-label {
-   color: var(--coord-color-dark);
- }
- 
- /* ─── Pieces ─────────────────────────────────────────────────────────────────── */
- 
- /*
-  * BUG FIX: added explicit color + text-shadow per piece side.
-  * Without these, all pieces inherit body color (#f9fafb) and appear white.
-  *
-  * .piece--white / .piece--black are set in chessHelpers via getPieceColor()
-  * and applied in ChessBoard.tsx's Square component.
-  */
- .piece {
-   font-size: clamp(1.5rem, 8vw, 2.25rem);
-   line-height: 1;
-   display: flex;
-   align-items: center;
-   justify-content: center;
-   pointer-events: none;
-   transition: transform var(--duration-fast) var(--ease-out);
-   /* Prevent the piece inheriting whatever color the parent square has */
-   color: inherit;
- }
- 
- .piece--white {
-   color: var(--piece-white);
-   text-shadow:
-     0 0 2px var(--piece-white-shadow),
-     0 1px 3px var(--piece-white-shadow);
- }
- 
- .piece--black {
-   color: var(--piece-black);
-   text-shadow:
-     0 0 2px var(--piece-black-shadow),
-     0 1px 3px var(--piece-black-shadow);
- }
- 
- .chess-square:active .piece {
-   transform: scale(0.9);
- }
- 
- /* ─── Board loading overlay ──────────────────────────────────────────────────── */
- 
- .board-overlay {
-   position: absolute;
-   inset: 0;
-   background: rgba(0, 0, 0, 0.08);
-   border-radius: inherit;
-   pointer-events: none;
-   z-index: 10;
-   animation: pulse-overlay 1s ease-in-out infinite;
- }
- 
- @keyframes pulse-overlay {
-   0%, 100% { opacity: 0.4; }
-   50%       { opacity: 1;   }
- }
- 
- /* ─── Board placeholder ──────────────────────────────────────────────────────── */
- 
- .board-placeholder {
-   --board-size: clamp(250px, 90vw, 480px);
-   width:  var(--board-size);
-   height: var(--board-size);
-   display: flex;
-   flex-direction: column;
-   align-items: center;
-   justify-content: center;
-   gap: 16px;
-   background-color: #1f2937;
-   border: 6px solid var(--board-border);
-   border-radius: 4px;
-   color: #9ca3af;
- }
- 
- .board-placeholder__spinner {
-   width:  clamp(30px, 6vw, 40px);
-   height: clamp(30px, 6vw, 40px);
-   border: 3px solid #374151;
-   border-top-color: #f0d9b5;
-   border-radius: 50%;
-   animation: spin 0.9s linear infinite;
- }
- 
- @keyframes spin {
-   to { transform: rotate(360deg); }
- }
- 
- /* ─── Chat ───────────────────────────────────────────────────────────────────── */
- 
- .chat-container {
-   max-height: 400px;
-   overflow-y: auto;
-   -webkit-overflow-scrolling: touch;
-   scrollbar-gutter: stable;
- }
- 
- .chat-container::-webkit-scrollbar       { width: 6px; }
- .chat-container::-webkit-scrollbar-track { background: transparent; }
- .chat-container::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
- 
- .chat-message {
-   padding: 8px 12px;
-   margin-bottom: 6px;
-   border-radius: 12px;
-   max-width: 80%;
-   font-size: 0.875rem;
-   line-height: 1.4;
-   word-break: break-word;
- }
- 
- .chat-message.own {
-   background-color: var(--chat-own-bg);
-   color: #fff;
-   margin-left: auto;
-   border-bottom-right-radius: 4px;
- }
- 
- .chat-message.opponent {
-   background-color: var(--chat-opponent-bg);
-   color: #f3f4f6;
-   margin-right: auto;
-   border-bottom-left-radius: 4px;
- }
- 
- .chat-message.system {
-   background-color: var(--chat-system-bg);
-   color: #9ca3af;
-   margin: 0 auto 6px;
-   text-align: center;
-   font-style: italic;
-   border-radius: 8px;
-   max-width: 90%;
- }
- 
- /* ─── Game status badge ──────────────────────────────────────────────────────── */
- 
- .game-status {
-   padding: 10px 16px;
-   border-radius: 8px;
-   text-align: center;
-   font-size: 0.875rem;
-   font-weight: 600;
-   letter-spacing: 0.02em;
-   text-transform: uppercase;
- }
- 
- .game-status.waiting  { background-color: var(--status-waiting-bg);  color: var(--status-waiting-fg);  }
- .game-status.active   { background-color: var(--status-active-bg);   color: var(--status-active-fg);   }
- .game-status.finished { background-color: var(--status-finished-bg); color: var(--status-finished-fg); }
- 
- /* ─── Reduced-motion ─────────────────────────────────────────────────────────── */
- 
- @media (prefers-reduced-motion: reduce) {
-   *, *::before, *::after {
-     animation-duration:  1ms !important;
-     transition-duration: 1ms !important;
-   }
- }
+:root {
+  --bg-gradient: linear-gradient(145deg, #fbeaec 0%, #f3d6d8 100%);
+
+  --accent-1: #c9455c;
+  --accent-2: #ff8ca2;
+  --accent-3: #ff7b91;
+
+  --surface-1: #ffecf0;
+  --surface-2: #ffeef2;
+  --surface-3: #fff2f2;
+
+  --text-1: #1e1b1c;
+  --text-2: #2d2325;
+  --text-3: #3f2e31;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100vh;
+  width: 100%;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-gradient);
+  color: var(--text-1);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* smooth navigation */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 64px;
+  flex-wrap: wrap;
+  gap: 24px 32px;
+  backdrop-filter: blur(4px);
+  background: rgba(255, 245, 247, 0.3);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+  font-size: 1.4rem;
+  letter-spacing: -0.3px;
+  color: var(--text-2);
+}
+
+.logo-icon {
+  width: 24px;
+  height: 24px;
+  background: var(--accent-1);
+  border-radius: 8px 2px 12px 2px;
+  transform: rotate(5deg);
+  box-shadow: 2px 4px 10px rgba(201, 69, 92, 0.3);
+}
+
+nav {
+  display: flex;
+  gap: 44px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+nav a {
+  cursor: default;
+  color: var(--text-3);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: border 0.15s;
+  padding-bottom: 4px;
+}
+
+nav a:hover {
+  border-bottom-color: var(--accent-3);
+}
+
+.domain-btn {
+  background: var(--text-2);
+  color: #fff0f2;
+  border: none;
+  padding: 14px 32px;
+  border-radius: 40px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.1);
+  transition: all 0.2s;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.domain-btn:hover {
+  background: #4d2f35;
+  transform: scale(1.02);
+  box-shadow: 0 12px 24px rgba(201, 69, 92, 0.3);
+}
+
+/* HERO section */
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 40px 64px;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.hero-left {
+  flex: 1 1 280px;
+  min-width: 260px;
+}
+
+.hero-left h1 {
+  font-size: clamp(2.8rem, 5vw, 4.2rem);
+  font-weight: 700;
+  line-height: 1.1;
+  margin-bottom: 20px;
+  color: #2a1f21;
+}
+
+.hero-left h1 span {
+  background: linear-gradient(145deg, var(--accent-1), var(--accent-2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.description {
+  opacity: 0.75;
+  margin-bottom: 32px;
+  font-size: 1.1rem;
+  max-width: 360px;
+  color: var(--text-3);
+}
+
+.buttons {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.primary-btn {
+  background: var(--text-2);
+  color: white;
+  border: none;
+  padding: 14px 32px;
+  border-radius: 60px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  transition: 0.2s;
+}
+
+.primary-btn:hover {
+  background: #402a2e;
+  transform: translateY(-3px);
+}
+
+.secondary-btn {
+  background: rgba(255,255,255,0.6);
+  backdrop-filter: blur(8px);
+  border: 2px solid rgba(255, 123, 145, 0.5);
+  padding: 14px 32px;
+  border-radius: 60px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s;
+  color: var(--text-2);
+}
+
+.secondary-btn:hover {
+  background: white;
+  border-color: var(--accent-3);
+}
+
+.danger-btn {
+  background: var(--accent-1);
+  color: white;
+  border: none;
+  padding: 14px 32px;
+  border-radius: 60px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.1);
+  transition: 0.2s;
+}
+
+.danger-btn:hover {
+  background: #b13a50;
+  transform: translateY(-3px);
+}
+
+/* CHESS AREA (board + heart bg) */
+.chess-area {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.heart-bg {
+  position: absolute;
+  width: 440px;
+  height: 440px;
+  background: radial-gradient(circle at 30% 40%, #ffa5b9, #ff6b81 70%);
+  border-radius: 40% 60% 70% 30% / 50% 40% 60% 50%;
+  filter: blur(48px);
+  z-index: -1;
+  opacity: 0.5;
+  animation: softPulse 6s infinite alternate;
+}
+
+@keyframes softPulse {
+  0% { transform: scale(0.95); opacity: 0.5; filter: blur(48px); }
+  100% { transform: scale(1.1); opacity: 0.7; filter: blur(44px); }
+}
+
+/* BOARD refined */
+.board {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(62px, 80px));
+  grid-template-rows: repeat(8, minmax(62px, 80px));
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 25px 45px -10px rgba(64, 42, 46, 0.4);
+  border: 3px solid var(--surface-3);
+  transition: box-shadow 0.3s;
+}
+
+.board:hover {
+  box-shadow: 0 30px 55px -8px #c9455c80;
+}
+
+.light {
+  background: var(--surface-1);
+}
+
+.dark {
+  background: #ffb0c0;
+}
+
+.square {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  cursor: pointer;
+  transition: 0.15s;
+  text-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  color: #2f2225;
+}
+
+.square:hover {
+  transform: scale(1.06);
+  background: #ffe2e8;
+  z-index: 2;
+  box-shadow: 0 0 0 2px #ffd0d6;
+}
+
+/* chat box – softer, floating */
+.chat-box {
+  width: 280px;
+  background: rgba(255, 250, 250, 0.8);
+  backdrop-filter: blur(16px);
+  border-radius: 28px;
+  padding: 24px 22px;
+  box-shadow: 0 20px 40px -8px rgba(86, 48, 56, 0.3);
+  border: 1px solid #ffe8ec;
+  transition: transform 0.2s;
+  flex: 1 1 240px;
+}
+
+.chat-box:hover {
+  transform: translateY(-4px);
+}
+
+.chat-box h3 {
+  margin-bottom: 22px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #4d2f35;
+  font-size: 1.3rem;
+}
+
+.chat-box h3::before {
+  content: "❤️";
+  font-size: 1.3rem;
+  filter: drop-shadow(0 2px 2px #f78);
+}
+
+.message {
+  background: var(--surface-2);
+  padding: 16px 18px;
+  border-radius: 26px 26px 26px 8px;
+  margin-bottom: 14px;
+  font-size: 0.95rem;
+  font-weight: 400;
+  box-shadow: inset 0 1px 3px #fff, 0 4px 8px rgba(255, 160, 180, 0.2);
+  border: 1px solid #ffdae2;
+  color: #332527;
+}
+
+.message:last-child {
+  margin-bottom: 0;
+}
+
+.message span {
+  font-weight: 600;
+  color: #c63e5c;
+}
+
+.chat-box .timestamp {
+  font-size: 0.7rem;
+  opacity: 0.5;
+  margin-top: 4px;
+  display: block;
+}
+
+.chat-input {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.chat-input input {
+  flex: 1;
+  background: rgba(255,255,255,0.65);
+  border: 1px solid #ffdae2;
+  border-radius: 22px;
+  padding: 12px 14px;
+  outline: none;
+  font-size: 0.95rem;
+  color: #2d2325;
+}
+
+.chat-input button {
+  padding: 12px 18px;
+  border-radius: 22px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  background: var(--accent-1);
+  color: white;
+  transition: 0.2s;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.1);
+}
+
+.chat-input button:hover {
+  background: #b13a50;
+  transform: translateY(-2px);
+}
+
+/* generic layout helpers */
+.page {
+  width: 100%;
+}
+
+.page-center {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 56px 24px;
+}
+
+.card {
+  width: min(520px, 92vw);
+  background: rgba(255, 250, 250, 0.8);
+  backdrop-filter: blur(16px);
+  border-radius: 28px;
+  padding: 28px 26px;
+  box-shadow: 0 20px 40px -8px rgba(86, 48, 56, 0.3);
+  border: 1px solid #ffe8ec;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.field label {
+  color: #4d2f35;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.field input {
+  background: rgba(255,255,255,0.65);
+  border: 1px solid #ffdae2;
+  border-radius: 22px;
+  padding: 12px 14px;
+  outline: none;
+  font-size: 0.95rem;
+  color: #2d2325;
+}
+
+.helper-link {
+  color: #c63e5c;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.helper-link:hover {
+  text-decoration: underline;
+}
+
+/* tiny extra charm: floating hearts in background */
+.floating-heart {
+  position: fixed;
+  font-size: 1.6rem;
+  opacity: 0.15;
+  user-select: none;
+  pointer-events: none;
+  z-index: -2;
+  bottom: 10px;
+  right: 20px;
+  transform: rotate(10deg);
+}
+
+@media (max-width: 1150px) {
+  .navbar {
+    padding: 24px 36px;
+  }
+  .hero {
+    justify-content: center;
+    padding: 40px 36px;
+  }
+  .hero-left {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  .board {
+    grid-template-columns: repeat(8, minmax(55px, 70px));
+    grid-template-rows: repeat(8, minmax(55px, 70px));
+  }
+  .heart-bg {
+    width: 380px;
+    height: 380px;
+  }
+}
+
+@media (max-width: 700px) {
+  .navbar {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+  nav {
+    justify-content: center;
+    gap: 24px;
+  }
+  .domain-btn {
+    width: fit-content;
+    margin: 0 auto;
+  }
+  .board {
+    grid-template-columns: repeat(8, minmax(34px, 11vw));
+    grid-template-rows: repeat(8, minmax(34px, 11vw));
+    max-width: 92vw;
+  }
+  .square {
+    font-size: 2rem;
+  }
+  .heart-bg {
+    width: 320px;
+    height: 320px;
+  }
+}

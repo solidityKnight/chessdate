@@ -24,12 +24,17 @@ function chatSocket(socket, io) {
         return;
       }
 
+      if (!socket.user || !socket.user.id) {
+        socket.emit('error', { message: 'You must be logged in to chat' });
+        return;
+      }
+
       // Add message to game chat
-      const chatMessage = await gameManager.addChatMessage(gameId, socket.id, message.trim());
+      const chatMessage = await gameManager.addChatMessage(gameId, socket.user.id, message.trim());
 
       // Broadcast message to all players in the game room
       io.to(gameId).emit('chat_message', {
-        playerId: socket.id,
+        playerId: socket.user.id,
         playerColor,
         message: chatMessage.message,
         timestamp: chatMessage.timestamp
@@ -61,7 +66,17 @@ function chatSocket(socket, io) {
       }
 
       socket.emit('chat_history', {
-        messages: gameState.chatMessages || []
+        messages: (gameState.chatMessages || []).map((m) => ({
+          playerId: m.playerId,
+          playerColor:
+            gameState.userIds?.white && m.playerId === gameState.userIds.white
+              ? 'white'
+              : gameState.userIds?.black && m.playerId === gameState.userIds.black
+                ? 'black'
+                : playerColor,
+          message: m.message,
+          timestamp: m.timestamp
+        }))
       });
 
     } catch (error) {

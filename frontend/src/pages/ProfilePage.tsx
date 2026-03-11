@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 import api from '../services/apiService';
-import { Trophy, Clock, Target, User as UserIcon, LogOut, ShieldCheck, ChevronRight } from 'lucide-react';
+import RomanticLayout from '../components/RomanticLayout';
+import RomanticButton from '../components/RomanticButton';
 
 const ProfilePage: React.FC = () => {
   const { user, setUser, setToken } = useGameStore();
@@ -30,159 +31,114 @@ const ProfilePage: React.FC = () => {
     navigate('/login');
   };
 
-  if (!user || loading) return <div className="p-8 text-center">Loading...</div>;
+  if (!user || loading) {
+    return (
+      <RomanticLayout>
+        <div className="page-center">
+          <div className="card" style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 34, marginBottom: 8 }}>🌸</div>
+            <div style={{ fontWeight: 700, fontSize: '1.4rem', color: '#2a1f21' }}>Loading Profile…</div>
+            <div style={{ opacity: 0.75, marginTop: 6, color: '#3f2e31' }}>One moment while we fetch your love stats.</div>
+          </div>
+        </div>
+      </RomanticLayout>
+    );
+  }
 
-  const winRate = user.stats.gamesPlayed > 0 
-    ? Math.round((user.stats.wins / user.stats.gamesPlayed) * 100) 
+  const stats = user.stats || { gamesPlayed: 0, wins: 0, losses: 0, draws: 0, winStreak: 0, maxWinStreak: 0 };
+  const achievements = user.achievements || [];
+
+  const winRate = stats.gamesPlayed > 0 
+    ? Math.round((stats.wins / stats.gamesPlayed) * 100) 
     : 0;
 
   return (
-    <div className="flex-1 overflow-y-auto bg-gray-900 p-4 sm:p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-center bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-xl">
-          <div className="flex items-center space-x-4">
-            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center text-3xl font-bold">
-              {user.username[0].toUpperCase()}
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold flex items-center">
-                {user.username}
-                {user.role === 'admin' && <ShieldCheck className="ml-2 text-yellow-500 w-5 h-5" />}
-              </h1>
-              <p className="text-gray-400 capitalize">{user.gender}</p>
-            </div>
-          </div>
-          <div className="mt-4 sm:mt-0 flex space-x-3">
-            {user.role === 'admin' && (
-              <button 
-                onClick={() => navigate('/admin')}
-                className="px-4 py-2 bg-yellow-600/20 text-yellow-500 rounded-lg hover:bg-yellow-600/30 transition-all border border-yellow-600/30"
+    <RomanticLayout>
+      <div className="page-center">
+        <div className="card" style={{ width: 'min(980px, 92vw)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div
+                style={{
+                  width: 64,
+                  height: 64,
+                  borderRadius: 18,
+                  background: '#ffeef2',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 30,
+                  fontWeight: 700,
+                  color: '#2d2325',
+                  border: '1px solid #ffdae2',
+                  boxShadow: 'inset 0 1px 3px #fff',
+                }}
               >
-                Admin Panel
-              </button>
-            )}
-            <button 
-              onClick={handleLogout}
-              className="flex items-center px-4 py-2 bg-red-600/20 text-red-500 rounded-lg hover:bg-red-600/30 transition-all border border-red-600/30"
-            >
-              <LogOut className="w-4 h-4 mr-2" />
-              Logout
-            </button>
-          </div>
-        </div>
+                {user.username?.[0]?.toUpperCase()}
+              </div>
+              <div>
+                <div style={{ fontSize: '1.6rem', fontWeight: 700, color: '#2a1f21' }}>{user.username}</div>
+                <div style={{ opacity: 0.75, color: '#3f2e31', marginTop: 2 }}>Gender: <b style={{ color: '#c63e5c' }}>{user.gender}</b></div>
+              </div>
+            </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Credits Card */}
-          <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-xl col-span-1">
-            <h2 className="text-lg font-semibold mb-4 flex items-center">
-              <Clock className="w-5 h-5 mr-2 text-blue-400" />
-              Credits
-            </h2>
-            <div className="text-center py-4">
-              <span className="text-4xl font-bold text-blue-500">{user.credits}</span>
-              <span className="text-gray-400 text-lg"> / 5</span>
-              <p className="text-sm text-gray-500 mt-2">
-                {user.gamesPlayedInCredit} / 5 games played in current credit
-              </p>
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {user.role === 'admin' && (
+                <RomanticButton variant="secondary" onClick={() => navigate('/admin')}>Admin Panel</RomanticButton>
+              )}
+              <RomanticButton variant="danger" onClick={handleLogout}>Logout</RomanticButton>
             </div>
           </div>
 
-          {/* Stats Card */}
-          <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-xl col-span-2">
-            <h2 className="text-lg font-semibold mb-4 flex items-center">
-              <Target className="w-5 h-5 mr-2 text-pink-400" />
-              Stats
-            </h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="text-center">
-                <p className="text-2xl font-bold">{user.stats.gamesPlayed}</p>
-                <p className="text-xs text-gray-500 uppercase">Games</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-green-500">{user.stats.wins}</p>
-                <p className="text-xs text-gray-500 uppercase">Wins</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-red-500">{user.stats.losses}</p>
-                <p className="text-xs text-gray-500 uppercase">Losses</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-blue-400">{winRate}%</p>
-                <p className="text-xs text-gray-500 uppercase">Win Rate</p>
-              </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginTop: 22 }}>
+            <div className="chat-box" style={{ width: '100%' }}>
+              <h3>Credits</h3>
+              <div className="message"><span>Credits:</span> {user.credits} / 5<div className="timestamp">regen</div></div>
+              <div className="message"><span>Used:</span> {user.gamesPlayedInCredit} / 5 games<div className="timestamp">this cycle</div></div>
+            </div>
+
+            <div className="chat-box" style={{ width: '100%' }}>
+              <h3>Stats</h3>
+              <div className="message"><span>Games:</span> {stats.gamesPlayed}<div className="timestamp">total</div></div>
+              <div className="message"><span>Wins:</span> {stats.wins} • <span>Losses:</span> {stats.losses}<div className="timestamp">record</div></div>
+              <div className="message"><span>Win Rate:</span> {winRate}%<div className="timestamp">sweet</div></div>
             </div>
           </div>
-        </div>
 
-        {/* Achievements Section */}
-        <div className="bg-gray-800 p-6 rounded-2xl border border-gray-700 shadow-xl">
-          <h2 className="text-lg font-semibold mb-6 flex items-center">
-            <Trophy className="w-5 h-5 mr-2 text-yellow-400" />
-            Achievements
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {user.achievements.length > 0 ? (
-              user.achievements.map((a, i) => (
-                <div key={i} className="bg-gray-700/50 p-4 rounded-xl border border-gray-600 flex items-center space-x-3">
-                  <div className="bg-yellow-500/20 p-2 rounded-lg text-yellow-500">
-                    <Trophy className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">{a.name}</p>
-                    <p className="text-xs text-gray-400">{a.description}</p>
-                  </div>
-                </div>
-              ))
+          <div style={{ marginTop: 22 }}>
+            <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#4d2f35', marginBottom: 12 }}>Achievements</div>
+            {achievements.length === 0 ? (
+              <div className="message"><span>None yet:</span> Keep playing to unlock romantic badges.<div className="timestamp">soon</div></div>
             ) : (
-              <p className="text-gray-500 col-span-3 text-center py-4 italic">
-                No achievements unlocked yet. Keep playing!
-              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+                {achievements.map((a: any, i: number) => (
+                  <div key={i} className="message" style={{ borderRadius: 18 }}>
+                    <span>{a.name}:</span> {a.description}
+                    <div className="timestamp">unlocked</div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-        </div>
 
-        {/* Recent Games */}
-        <div className="bg-gray-800 rounded-2xl border border-gray-700 shadow-xl overflow-hidden">
-          <div className="p-6 border-b border-gray-700">
-            <h2 className="text-lg font-semibold flex items-center">
-              <Clock className="w-5 h-5 mr-2 text-purple-400" />
-              Recent Games
-            </h2>
-          </div>
-          <div className="divide-y divide-gray-700">
-            {recentGames.length > 0 ? (
-              recentGames.map((game, i) => {
-                const isWhite = game.whitePlayerId === user.id;
-                const result = game.winnerId === user.id ? 'Win' : (game.winnerId ? 'Loss' : 'Draw');
-                const opponent = isWhite ? game.blackPlayer.username : game.whitePlayer.username;
-                
-                return (
-                  <div key={i} className="p-4 flex justify-between items-center hover:bg-gray-700/30 transition-all cursor-default">
-                    <div>
-                      <p className="font-medium">vs {opponent}</p>
-                      <p className="text-xs text-gray-500">{new Date(game.startedAt).toLocaleDateString()}</p>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        result === 'Win' ? 'bg-green-500/10 text-green-500' :
-                        result === 'Loss' ? 'bg-red-500/10 text-red-500' :
-                        'bg-blue-500/10 text-blue-500'
-                      }`}>
-                        {result}
-                      </span>
-                      <ChevronRight className="w-4 h-4 text-gray-600" />
-                    </div>
-                  </div>
-                );
-              })
+          <div style={{ marginTop: 22 }}>
+            <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#4d2f35', marginBottom: 12 }}>Recent Games</div>
+            {recentGames.length === 0 ? (
+              <div className="message"><span>Quiet board:</span> No recent games found.<div className="timestamp">—</div></div>
             ) : (
-              <p className="p-8 text-center text-gray-500 italic">No recent games found.</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12 }}>
+                {recentGames.slice(0, 6).map((game, i) => (
+                  <div key={i} className="message" style={{ borderRadius: 18 }}>
+                    <span>Game:</span> {new Date(game.startedAt).toLocaleDateString()}
+                    <div className="timestamp">{game.result || 'played'}</div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </div>
       </div>
-    </div>
+    </RomanticLayout>
   );
 };
 

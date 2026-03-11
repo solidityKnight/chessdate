@@ -409,6 +409,57 @@ class GameManager {
   }
 
   /**
+   * Resign a game on behalf of a player, update state, and persist.
+   *
+   * @param {string} gameId
+   * @param {'white'|'black'} playerColor
+   * @param {import('socket.io').Server} io
+   * @returns {Promise<GameState>}
+   */
+  async resignGame(gameId, playerColor, io) {
+    try {
+      const gameState = await this.getGameState(gameId);
+      if (!gameState) {
+        throw new Error(`Game ${gameId} not found`);
+      }
+
+      const game = this.games.get(gameId);
+
+      if (game.status !== 'active') {
+        throw new Error(`Game ${gameId} is not active (status: ${game.status})`);
+      }
+
+      gameState.status = 'finished';
+      gameState.result = 'resignation';
+      gameState.winner = playerColor === 'white' ? 'black' : 'white';
+      
+      if (game) game.status = 'finished';
+
+      await this._save(gameId, gameState);
+
+      // Sync with PostgreSQL
+      if (gameState.userIds && gameState.userIds.white && gameState.userIds.black) {
+        const gameUpdate = {
+          status: 'finished',
+          result: 'resignation',
+          winnerId: gameState.winner === 'white' ? gameState.userIds.white : gameState.userIds.black,
+          endedAt: new Date()
+        };
+
+        await Game.update(gameUpdate, { where: { gameId } });
+
+        // Update stats and achievements
+        await this._updateUserStats(gameState, io);
+      }
+
+      return gameState;
+    } catch (err) {
+      console.error('resignGame error:', err);
+      throw err;
+    }
+  }
+
+  /**
    * Append a chat message to the game and persist.
    *
    * @param {string} gameId
@@ -418,9 +469,13 @@ class GameManager {
    */
   async addChatMessage(gameId, playerId, message) {
     try {
-      const gameState = await this.getGameState(gameId);
+      const gameState = await this.getGameState(gameId, true);
       if (!gameState) {
         throw new Error(`Game ${gameId} not found`);
+      }
+
+      if (!Array.isArray(gameState.chatMessages)) {
+        gameState.chatMessages = [];
       }
 
       const chatMessage = { playerId, message, timestamp: Date.now() };

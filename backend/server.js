@@ -49,13 +49,55 @@ function checkOrigin(origin, callback) {
   // same-origin / mobile / curl
   if (!origin) return callback(null, true);
 
+  if (process.env.ALLOW_ALL_ORIGINS === 'true') {
+    return callback(null, true);
+  }
+
+  const normalize = (value) => {
+    try {
+      return new URL(value).origin;
+    } catch {
+      return String(value || '').replace(/\/+$/, '');
+    }
+  };
+
+  const isPrivateLanOrigin = (value) => {
+    try {
+      const u = new URL(value);
+      const host = u.hostname;
+      if (host === 'localhost' || host === '127.0.0.1') return true;
+      if (host.startsWith('192.168.')) return true;
+      if (host.startsWith('10.')) return true;
+      const m = host.match(/^172\.(\d+)\./);
+      if (m) {
+        const n = Number(m[1]);
+        if (n >= 16 && n <= 31) return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
   const isRailway = origin.includes('railway.app') || origin.includes('up.railway.app');
   const isCustom  = origin.includes('chessdate.in') || origin.includes('www.chessdate.in');
-  const isLocal   = process.env.NODE_ENV !== 'production' && (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:'));
-  const isExplicit = process.env.FRONTEND_URL && origin === process.env.FRONTEND_URL;
+  const isLocal   = process.env.NODE_ENV !== 'production' && (isPrivateLanOrigin(origin) || origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:'));
+  const explicitList = process.env.FRONTEND_URL
+    ? process.env.FRONTEND_URL.split(',').map((o) => normalize(o.trim())).filter(Boolean)
+    : [];
+  const isExplicit = explicitList.length > 0 && explicitList.includes(normalize(origin));
 
   if (isRailway || isCustom || isLocal || isExplicit) {
     return callback(null, true);
+  }
+
+  if (process.env.NODE_ENV === 'production' && !process.env.FRONTEND_URL) {
+    try {
+      const url = new URL(origin);
+      if (url.protocol === 'https:' || url.protocol === 'http:') {
+        return callback(null, true);
+      }
+    } catch {}
   }
 
   console.log('🚫 CORS blocked origin:', origin);
@@ -148,7 +190,8 @@ sequelize.sync({ alter: true })
  * We resolve the path relative to the process root (cwd) for better consistency
  * during Railway builds and deployments.
  */
-const staticPath = path.resolve(process.cwd(), 'frontend', 'build');
+const repoRoot  = path.resolve(__dirname, '..');
+const staticPath = path.resolve(repoRoot, 'frontend', 'build');
 
 console.log('🔍 Deployment Diagnostics:');
 console.log('   - Port:', PORT);
@@ -237,6 +280,14 @@ io.on('connection', (socket) => {
 
 // For Railway, we MUST listen on the provided PORT and ideally on 0.0.0.0
 // to allow the proxy to reach the container.
+server.on('error', (err) => {
+  if (err && err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use. Stop the process using it or set a different PORT (e.g. 4001) and restart.`);
+    process.exit(1);
+  }
+  throw err;
+});
+
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on http://0.0.0.0:${PORT}`);
   console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
