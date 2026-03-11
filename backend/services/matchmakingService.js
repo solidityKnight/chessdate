@@ -9,6 +9,9 @@ class MatchmakingService {
   // Add player to matchmaking queue
   async addToQueue(socketId, gender) {
     try {
+      // Prevent duplicate entries in the same queue or opposite queue
+      await this.removeFromQueue(socketId);
+
       const queue = gender === 'male' ? this.maleQueue : this.femaleQueue;
 
       // Add player to queue with timestamp
