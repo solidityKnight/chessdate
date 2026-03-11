@@ -74,16 +74,26 @@
    box-sizing: border-box;
  }
  
- body {
+ html,
+ body,
+ #root {
    margin: 0;
+   padding: 0;
+   height: 100vh;
+   height: 100dvh; /* Dynamic viewport height for mobile browsers */
+   width: 100vw;
+   overflow: hidden !important; /* Force no scrolling at the top level */
+   position: fixed;
+   top: 0;
+   left: 0;
+ }
+ 
+ body {
    font-family: var(--font-ui);
    background-color: #111827;
    color: #f9fafb;
    -webkit-font-smoothing: antialiased;
    -moz-osx-font-smoothing: grayscale;
-   overflow: hidden; /* Prevent scrolling of the entire page */
-   height: 100vh;
-   width: 100vw;
  }
  
  code,
