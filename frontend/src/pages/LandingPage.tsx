@@ -18,7 +18,7 @@ const LandingPage: React.FC = () => {
   }, [isConnected, currentGame, navigate]);
 
   return (
-    <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900">
+    <div className="min-h-screen lg:h-full w-full flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 overflow-y-auto lg:overflow-hidden">
       <div className="max-w-md w-full mx-4">
         <div className="bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-700">
           <div className="text-center mb-8">

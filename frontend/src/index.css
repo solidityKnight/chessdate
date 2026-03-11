@@ -79,13 +79,23 @@
  #root {
    margin: 0;
    padding: 0;
-   height: 100vh;
-   height: 100dvh; /* Dynamic viewport height for mobile browsers */
+   min-height: 100vh;
+   min-height: 100dvh;
    width: 100vw;
-   overflow: hidden !important; /* Force no scrolling at the top level */
-   position: fixed;
-   top: 0;
-   left: 0;
+ }
+ 
+ /* Desktop only: lock scrolling */
+ @media (min-width: 1024px) {
+   html,
+   body,
+   #root {
+     height: 100vh;
+     height: 100dvh;
+     overflow: hidden !important;
+     position: fixed;
+     top: 0;
+     left: 0;
+   }
  }
  
  body {
