@@ -78,8 +78,6 @@ class BotService {
    * @returns {{ socketId: string, userId: string, difficulty: string, name: string, gender: string }}
    */
   createBotPlayer(difficulty, botGender) {
-    const names = BOT_NAMES[difficulty] || BOT_NAMES.medium;
-    const name = names[Math.floor(Math.random() * names.length)];
     const id = `bot_${difficulty}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
     return {

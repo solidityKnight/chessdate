@@ -1,3 +1,5 @@
+const aiChatService = require('./AIChatService');
+
 /**
  * Generates a fun AI chess-themed pick-up line.
  * Uses a large local library of curated lines to ensure it's free and always works without a key.
@@ -46,4 +48,15 @@ exports.generateChessPickUpLine = async () => {
     console.error('Pick-up Line Selection Error:', error);
     return "Are you a queen? Because you've been running through my mind all game.";
   }
+};
+
+/**
+ * Assign a bot name based on gender.
+ * Delegates to AIChatService.
+ * 
+ * @param {string} gender 
+ * @returns {string}
+ */
+exports.assignBotName = (gender) => {
+  return aiChatService.assignBotName(gender);
 };
