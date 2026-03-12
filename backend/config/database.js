@@ -1,7 +1,16 @@
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
-const isProduction = process.env.DATABASE_URL ? true : false;
+/**
+ * Some managed Postgres providers (including certain Railway tiers) either:
+ * - require SSL, or
+ * - do NOT support SSL at all.
+ *
+ * Instead of assuming "DATABASE_URL means SSL", we make SSL opt‑in via
+ * DB_SSL=true. This lets you connect to non‑SSL databases like the one you
+ * just provisioned, while still supporting SSL if you enable it explicitly.
+ */
+const shouldUseSsl = String(process.env.DB_SSL || '').toLowerCase() === 'true';
 
 const sequelize = new Sequelize(
   process.env.DATABASE_URL || 'postgres://localhost:5432/chessdate',
@@ -16,7 +25,7 @@ const sequelize = new Sequelize(
       idle: 10000
     },
 
-    dialectOptions: isProduction
+    dialectOptions: shouldUseSsl
       ? {
           ssl: {
             require: true,

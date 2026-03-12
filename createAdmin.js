@@ -27,22 +27,25 @@ async function createAdmin() {
     
     // Check if user already exists
     const existingUser = await User.findOne({ where: { email: adminEmail } });
-    
+
     if (existingUser) {
-      console.log(`ℹ️ User ${adminEmail} already exists. Updating to admin...`);
+      console.log(`ℹ️ User ${adminEmail} already exists. Updating to admin and resetting password...`);
       existingUser.role = 'admin';
+      // Reset password so you can always log in with a known credential.
+      // Hashed by model hooks (beforeUpdate).
+      existingUser.password = 'admin123';
       await existingUser.save();
-      console.log('✅ User promoted to Admin successfully.');
+      console.log('✅ User promoted to Admin and password reset to "admin123".');
     } else {
       console.log(`⏳ Creating new admin account: ${adminEmail}...`);
       await User.create({
         username: 'admin',
         email: adminEmail,
-        password: 'admin', // Will be hashed by User model hooks
+        password: 'admin123', // Will be hashed by User model hooks
         gender: 'male',
         role: 'admin'
       });
-      console.log('✅ Admin account created successfully.');
+      console.log('✅ Admin account created successfully with password "admin123".');
     }
   } catch (error) {
     console.error('❌ Error creating admin:', error.message);
