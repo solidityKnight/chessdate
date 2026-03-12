@@ -133,6 +133,9 @@ class SocketService {
       board:         string;
       pickUpLine?:   string;
       players?:      { white: string; black: string };
+      whiteTime?:    number;
+      blackTime?:    number;
+      lastMoveAt?:   number;
     }) => {
       useGameStore.getState().setInQueue(false);
       useGameStore.getState().setQueueStats(null);
@@ -165,6 +168,9 @@ class SocketService {
         moves:      [],
         gameStatus: { status: 'active' },
         pickUpLine: data.pickUpLine,
+        whiteTime:  data.whiteTime,
+        blackTime:  data.blackTime,
+        lastMoveAt: data.lastMoveAt,
       });
     });
 
@@ -176,6 +182,9 @@ class SocketService {
       board:      string;
       move:       MoveRecord;
       gameStatus: GameStatus;
+      whiteTime?: number;
+      blackTime?: number;
+      lastMoveAt?: number;
     }) => {
       useGameStore.getState().updateBoard(data.board, data.move, data.gameStatus, {
         whiteTime: data.whiteTime,
