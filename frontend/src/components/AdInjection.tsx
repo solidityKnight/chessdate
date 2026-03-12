@@ -5,8 +5,8 @@ const AdInjection: React.FC = () => {
   const location = useLocation();
 
   useEffect(() => {
-    // Check if the current path is landing page ('/') or login page ('/login')
-    const excludePaths = ['/', '/login'];
+    // Check if the current path is landing page ('/'), login page ('/login') or gameplay ('/play')
+    const excludePaths = ['/', '/login', '/play'];
     
     // We also want to match if there is a trailing slash (though react-router usually handles it)
     if (excludePaths.includes(location.pathname)) {

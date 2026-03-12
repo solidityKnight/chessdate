@@ -177,7 +177,11 @@ class SocketService {
       move:       MoveRecord;
       gameStatus: GameStatus;
     }) => {
-      useGameStore.getState().updateBoard(data.board, data.move, data.gameStatus);
+      useGameStore.getState().updateBoard(data.board, data.move, data.gameStatus, {
+        whiteTime: data.whiteTime,
+        blackTime: data.blackTime,
+        lastMoveAt: data.lastMoveAt,
+      });
     });
 
     this.socket.on('game_over', (data: {
