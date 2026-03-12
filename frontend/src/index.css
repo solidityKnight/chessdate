@@ -267,6 +267,7 @@ nav a:hover {
   transition: 0.15s;
   text-shadow: 0 2px 6px rgba(0,0,0,0.1);
   color: #2f2225;
+  position: relative;
 }
 
 .square:hover {
@@ -274,6 +275,41 @@ nav a:hover {
   background: #ffe2e8;
   z-index: 2;
   box-shadow: 0 0 0 2px #ffd0d6;
+}
+
+.square.selected {
+  box-shadow: inset 0 0 0 3px rgba(201, 69, 92, 0.65);
+  z-index: 1;
+}
+
+.square.possible {
+  z-index: 1;
+}
+
+.move-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: rgba(45, 35, 37, 0.35);
+  box-shadow: 0 0 0 4px rgba(255, 245, 247, 0.35);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.move-capture-ring {
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  border: 4px solid rgba(201, 69, 92, 0.55);
+  box-shadow: 0 0 0 4px rgba(255, 245, 247, 0.35);
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 /* chat box – softer, floating */

@@ -10,7 +10,7 @@ type RomanticChessboardProps = {
 
 const RomanticChessboard: React.FC<RomanticChessboardProps> = ({ interactive = true, showHeartGlow = true }) => {
   const currentGame = useGameStore((s) => s.currentGame);
-  const { selectSquare } = useChessGame();
+  const { selectSquare, selectedSquare, possibleMoves } = useChessGame();
   const flipped = currentGame?.playerColor === 'black';
 
   const board = useMemo(() => {
@@ -23,7 +23,7 @@ const RomanticChessboard: React.FC<RomanticChessboardProps> = ({ interactive = t
   }, [currentGame]);
 
   const squares = useMemo(() => {
-    const items: Array<{ key: string; className: string; content: string; square: string }> = [];
+    const items: Array<{ key: string; className: string; content: string; square: string; hasPiece: boolean; isPossible: boolean; isSelected: boolean }> = [];
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
         const displayRank = flipped ? row : 7 - row;
@@ -32,16 +32,21 @@ const RomanticChessboard: React.FC<RomanticChessboardProps> = ({ interactive = t
         const isLight = isLightSquare(displayFile, displayRank);
         const piece = board ? board[displayRank][displayFile] : null;
         const content = piece ? getPieceSymbol(piece) : '';
+        const isPossible = possibleMoves.includes(square);
+        const isSelected = selectedSquare === square;
         items.push({
           key: `${row}-${col}`,
           className: `square ${isLight ? 'light' : 'dark'}`,
           content,
           square,
+          hasPiece: !!piece,
+          isPossible,
+          isSelected,
         });
       }
     }
     return items;
-  }, [board, flipped]);
+  }, [board, flipped, possibleMoves, selectedSquare]);
 
   return (
     <div className="chess-area">
@@ -50,7 +55,7 @@ const RomanticChessboard: React.FC<RomanticChessboardProps> = ({ interactive = t
         {squares.map((sq) => (
           <div
             key={sq.key}
-            className={sq.className}
+            className={`${sq.className}${sq.isSelected ? ' selected' : ''}${sq.isPossible ? ' possible' : ''}`}
             onClick={() => {
               if (!interactive) return;
               if (!currentGame) return;
@@ -58,6 +63,9 @@ const RomanticChessboard: React.FC<RomanticChessboardProps> = ({ interactive = t
             }}
           >
             {sq.content}
+            {sq.isPossible && (
+              <span className={sq.hasPiece ? 'move-capture-ring' : 'move-dot'} />
+            )}
           </div>
         ))}
       </div>
