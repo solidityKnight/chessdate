@@ -33,7 +33,12 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 const app    = express();
-const server = http.createServer();
+const server = http.createServer((req, res) => {
+  if (typeof req.url === 'string' && req.url.startsWith('/socket.io')) {
+    return;
+  }
+  app(req, res);
+});
 const PORT   = process.env.PORT || 4000;
 
 // Trust Railway's proxy (for HTTPS detection, IP logging, etc.)
@@ -120,10 +125,6 @@ const io = socketIo(server, {
   pingTimeout:  60_000,
   pingInterval: 25_000,
 });
-
-// IMPORTANT: attach Express AFTER Socket.IO so polling endpoints under /socket.io
-// are handled correctly on platforms where websocket upgrade is not available.
-server.on('request', app);
 
 // ─── Express middleware ───────────────────────────────────────────────────────
 
