@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import RomanticLayout from '../components/RomanticLayout';
 import RomanticButton from '../components/RomanticButton';
+import AdBanner from '../components/AdBanner';
 import { useNavigate } from 'react-router-dom';
 
 const AboutPage: React.FC = () => {
@@ -33,6 +34,9 @@ const AboutPage: React.FC = () => {
           <div className="message"><span>Together:</span> A match worth making.<div className="timestamp">now</div></div>
         </div>
       </section>
+      <div className="page-center">
+        <AdBanner />
+      </div>
     </RomanticLayout>
   );
 };

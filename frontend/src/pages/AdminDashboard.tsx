@@ -4,6 +4,7 @@ import { useGameStore } from '../store/gameStore';
 import api from '../services/apiService';
 import RomanticLayout from '../components/RomanticLayout';
 import RomanticButton from '../components/RomanticButton';
+import AdBanner from '../components/AdBanner';
 
 const AdminDashboard: React.FC = () => {
   const { user } = useGameStore();
@@ -195,6 +196,7 @@ const AdminDashboard: React.FC = () => {
             )}
           </div>
         </div>
+        <AdBanner />
       </div>
     </RomanticLayout>
   );

@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import RomanticLayout from '../components/RomanticLayout';
 import RomanticButton from '../components/RomanticButton';
+import AdBanner from '../components/AdBanner';
 import { useNavigate } from 'react-router-dom';
 
 const GuidesPage: React.FC = () => {
@@ -33,6 +34,9 @@ const GuidesPage: React.FC = () => {
           <div className="message"><span>Tip 3:</span> Trade queens only if you’re sure…<div className="timestamp">always</div></div>
         </div>
       </section>
+      <div className="page-center">
+        <AdBanner />
+      </div>
     </RomanticLayout>
   );
 };

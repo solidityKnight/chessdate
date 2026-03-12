@@ -4,6 +4,7 @@ import { useGameStore } from '../store/gameStore';
 import api from '../services/apiService';
 import RomanticLayout from '../components/RomanticLayout';
 import RomanticButton from '../components/RomanticButton';
+import AdBanner from '../components/AdBanner';
 
 const ProfilePage: React.FC = () => {
   const { user, setUser, setToken } = useGameStore();
@@ -137,6 +138,7 @@ const ProfilePage: React.FC = () => {
             )}
           </div>
         </div>
+        <AdBanner />
       </div>
     </RomanticLayout>
   );

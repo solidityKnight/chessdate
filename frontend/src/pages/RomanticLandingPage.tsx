@@ -17,7 +17,7 @@ const RomanticLandingPage: React.FC = () => {
       <section className="hero">
         <div className="hero-left">
           <h1>
-            <span>Castles,</span> knights<br />butterflies in<br />stomach.
+            <span>Castles,</span> knights,<br />butterflies in<br />stomach.
           </h1>
           <p className="description">
             Play chess with a stranger and chat during the match.<br />

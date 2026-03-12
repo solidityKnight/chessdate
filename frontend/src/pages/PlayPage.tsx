@@ -8,6 +8,7 @@ import RomanticLayout from '../components/RomanticLayout';
 import RomanticButton from '../components/RomanticButton';
 import RomanticChessboard from '../components/RomanticChessboard';
 import RomanticChatBox from '../components/RomanticChatBox';
+import AdBanner from '../components/AdBanner';
 
 const PlayPage: React.FC = () => {
   useSocket();
@@ -58,6 +59,9 @@ const PlayPage: React.FC = () => {
           <RomanticChessboard interactive={false} showHeartGlow={true} />
           <RomanticChatBox title="Match chat" showInput={false} />
         </section>
+        <div className="page-center">
+          <AdBanner />
+        </div>
       </RomanticLayout>
     );
   }
@@ -151,6 +155,9 @@ const PlayPage: React.FC = () => {
 
         <RomanticChatBox title="Match chat" showInput={true} />
       </section>
+      <div className="page-center">
+        <AdBanner />
+      </div>
     </RomanticLayout>
   );
 };
