@@ -1,9 +1,11 @@
 const path = require('path');
 const fs = require('fs');
 
-// Load .env manually
+// Load backend/.env only when DATABASE_URL is NOT already provided.
+// This lets you point the script at a specific database (e.g. Railway)
+// via the DATABASE_URL env var without it being overwritten.
 const envPath = path.join(__dirname, 'backend', '.env');
-if (fs.existsSync(envPath)) {
+if (!process.env.DATABASE_URL && fs.existsSync(envPath)) {
   const envConfig = fs.readFileSync(envPath, 'utf8');
   envConfig.split('\n').forEach(line => {
     const [key, ...valueParts] = line.split('=');
