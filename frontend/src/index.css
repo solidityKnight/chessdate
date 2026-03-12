@@ -251,11 +251,11 @@ nav a:hover {
 }
 
 .light {
-  background: var(--surface-1); /* Light pink */
+  background: #ffb0c0; /* Pink (was dark) */
 }
 
 .dark {
-  background: #ffb0c0; /* Pink */
+  background: var(--surface-1); /* Light pink (was light) */
 }
 
 .square {
