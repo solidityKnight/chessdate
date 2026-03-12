@@ -146,7 +146,14 @@ Your personality is ${personality.name.toUpperCase()}: ${personality.traits}.\n`
         }\n`;
         break;
       case 'reply':
-        prompt += `Opponent said: "${lastPlayerMessage}". Reply naturally. If they ask for your name, tell them you are ${botName || 'Aarav'}.\n`;
+        const isAskingName = lastPlayerMessage?.toLowerCase().includes('name') || 
+                            lastPlayerMessage?.toLowerCase().includes('who are you') ||
+                            lastPlayerMessage?.toLowerCase().includes('who r u');
+        if (isAskingName) {
+          prompt += `Opponent is asking for your name. You MUST answer: "i'm ${botName || 'Aarav'}". Do not say anything else.\n`;
+        } else {
+          prompt += `Opponent said: "${lastPlayerMessage}". Reply naturally as ${botName || 'Aarav'}.\n`;
+        }
         break;
       case 'follow_up':
         prompt += `You are sending a follow-up message to what you just said. Keep it related and conversational. Do not repeat yourself.\n`;
