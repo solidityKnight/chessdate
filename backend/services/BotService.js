@@ -86,7 +86,7 @@ class BotService {
       socketId: id,
       userId: `bot-${difficulty}`,
       difficulty,
-      name,
+      name: aiService.assignBotName(botGender),
       gender: botGender,
     };
   }
@@ -173,10 +173,12 @@ class BotService {
       ? {
           white: { socketId: socket.id, userId: socket.user?.id || null },
           black: { socketId: botPlayer.socketId, userId: botPlayer.userId },
+          botName: botPlayer.name,
         }
       : {
           white: { socketId: botPlayer.socketId, userId: botPlayer.userId },
           black: { socketId: socket.id, userId: socket.user?.id || null },
+          botName: botPlayer.name,
         };
 
     const gameId = `game_${Date.now()}_bot_${Math.random().toString(36).substr(2, 6)}`;
@@ -226,6 +228,7 @@ class BotService {
     // Initialize chat session
     messageGenerator.initSession(gameId, {
       botGender,
+      botName: botPlayer.name,
       botColor,
       botSocketId: botPlayer.socketId,
       humanSocketId: socket.id,

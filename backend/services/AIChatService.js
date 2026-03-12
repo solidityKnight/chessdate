@@ -10,10 +10,43 @@
  *   AI_API_KEY=<your-free-api-key>
  */
 
+const fs = require('fs');
+const path = require('path');
 const settingsService = require('./SettingsService');
 
 const AI_PROVIDER = process.env.AI_PROVIDER || 'gemini';
 const AI_API_KEY  = process.env.AI_API_KEY  || '';
+
+// ─── Bot Names Loading ──────────────────────────────────────────────────────
+
+let botNames = { male: [], female: [] };
+try {
+  const namesPath = path.join(__dirname, '..', '..', 'chessdate_names_1000.txt');
+  if (fs.existsSync(namesPath)) {
+    const raw = fs.readFileSync(namesPath, 'utf8');
+    // The format is "Name - Gender Name - Gender ..."
+    // Split by whitespace and parse
+    const tokens = raw.split(/\s+/);
+    for (let i = 0; i < tokens.length; i++) {
+      if (tokens[i + 1] === '-' && tokens[i + 2]) {
+        const name = tokens[i];
+        const gender = tokens[i + 2].toLowerCase();
+        if (gender.includes('male')) botNames.male.push(name);
+        else if (gender.includes('female')) botNames.female.push(name);
+        i += 2; // skip past "- Gender"
+      }
+    }
+    console.log(`Loaded bot names: ${botNames.male.length} male, ${botNames.female.length} female`);
+  }
+} catch (err) {
+  console.error('Error loading bot names:', err);
+}
+
+function getRandomName(gender) {
+  const list = gender === 'female' ? botNames.female : botNames.male;
+  if (!list || list.length === 0) return gender === 'female' ? 'Emma' : 'Aarav';
+  return list[Math.floor(Math.random() * list.length)];
+}
 
 // ─── Fallback responses when no API is available ────────────────────────────
 
@@ -50,12 +83,26 @@ class AIChatService {
    * Generate a chat response using the configured AI provider.
    * Falls back to local responses if the API call fails.
    *
-   * @param {string} prompt - The full prompt to send
+   * @param {string} rawPrompt - The prompt description
+   * @param {object} context   - { botGender, botName, playerMove, gameState }
    * @returns {Promise<string>} - Short chat message
    */
-  async generateResponse(prompt) {
+  async generateResponse(rawPrompt, context = {}) {
     // Check if bots are enabled
     if (!settingsService.areBotsEnabled()) return null;
+
+    const { botName, botGender } = context;
+    const name = botName || 'Aarav';
+
+    const prompt = `You are playing a casual chess match on ChessDate. 
+Your name is ${name}. You are ${botGender || 'male'}.
+Rules: 
+1. Keep replies VERY short (under 10 words).
+2. Use lowercase and casual internet slang (hey, lol, u, r, etc.).
+3. Be friendly but slightly flirty if appropriate.
+4. If asked for your name, say "I'm ${name}".
+Context: ${rawPrompt}
+Reply as ${name}:`;
 
     if (!AI_API_KEY) {
       return this._fallbackResponse(prompt);
@@ -196,6 +243,13 @@ class AIChatService {
   getInstagramReply() {
     const pool = FALLBACK_RESPONSES.instagram_reply;
     return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  /**
+   * Assign a name for a new match.
+   */
+  assignBotName(gender) {
+    return getRandomName(gender);
   }
 
   // ─── Sanitize AI output ──────────────────────────────────────────────────

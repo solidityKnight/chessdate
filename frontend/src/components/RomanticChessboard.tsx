@@ -25,7 +25,8 @@ const RomanticChessboard: React.FC<RomanticChessboardProps> = ({ interactive = t
   }, [currentGame]);
 
   const squares = useMemo(() => {
-    const items: Array<{ key: string; className: string; content: string; square: string; hasPiece: boolean; isPossible: boolean; isSelected: boolean }> = [];
+    const lastMove = currentGame?.moves?.[currentGame.moves.length - 1];
+    const items: Array<{ key: string; className: string; content: string; square: string; hasPiece: boolean; isPossible: boolean; isSelected: boolean; isHighlight: boolean; }> = [];
     for (let row = 0; row < 8; row++) {
       for (let col = 0; col < 8; col++) {
         const displayRank = flipped ? row : 7 - row;
@@ -36,19 +37,22 @@ const RomanticChessboard: React.FC<RomanticChessboardProps> = ({ interactive = t
         const content = piece ? getPieceSymbol(piece) : '';
         const isPossible = possibleMoves.includes(square);
         const isSelected = selectedSquare === square;
+        const isHighlight = lastMove ? (square === lastMove.from || square === lastMove.to) : false;
+        
         items.push({
           key: `${row}-${col}`,
-          className: `square ${isLight ? 'light' : 'dark'}`,
+          className: `square ${isLight ? 'light' : 'dark'}${isHighlight ? ' highlight' : ''}`,
           content,
           square,
           hasPiece: !!piece,
           isPossible,
           isSelected,
+          isHighlight,
         });
       }
     }
     return items;
-  }, [board, flipped, possibleMoves, selectedSquare]);
+  }, [board, flipped, possibleMoves, selectedSquare, currentGame?.moves]);
 
   return (
     <div className="chess-area">

@@ -282,6 +282,10 @@ nav a:hover {
   z-index: 1;
 }
 
+.square.highlight {
+  background: rgba(255, 208, 0, 0.35) !important;
+}
+
 .square.possible {
   z-index: 1;
 }

@@ -212,6 +212,7 @@ class GameManager {
         lastMoveAt:   Date.now(),
         whiteTime:    600 * 1000,
         blackTime:    600 * 1000,
+        botName:      players.botName || null,
       };
 
       // Detect bot games (bot userIds start with 'bot-')

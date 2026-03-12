@@ -32,12 +32,13 @@ class BotMessageGenerator {
   /**
    * Initialize a chat session for a bot game.
    */
-  initSession(gameId, { botGender, botColor, botSocketId, humanSocketId }) {
+  initSession(gameId, { botGender, botName, botColor, botSocketId, humanSocketId }) {
     const personality = personalityEngine.selectPersonality();
     
     const session = {
       personality,
       botGender,
+      botName,
       botColor,
       botSocketId,
       humanSocketId,
@@ -191,7 +192,10 @@ class BotMessageGenerator {
     });
 
     // Get AI response (or fallback)
-    let message = await aiChatService.generateResponse(prompt);
+    let message = await aiChatService.generateResponse(prompt, {
+      botName: session.botName,
+      botGender: session.botGender,
+    });
 
     // Apply human imperfections
     message = personalityEngine.addHumanImperfections(message);
