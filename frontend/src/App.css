@@ -1,1 +1,11 @@
 /* Additional app-specific styles */
+.mobile-ad-spacer {
+  height: 100px; /* Space for the fixed bottom ad banner */
+  width: 100%;
+}
+
+@media (min-width: 700px) {
+  .mobile-ad-spacer {
+    display: none; /* Hide spacer on desktop where layout has more room */
+  }
+}

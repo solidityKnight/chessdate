@@ -55,7 +55,7 @@ const ProfilePage: React.FC = () => {
 
   return (
     <RomanticLayout>
-      <div className="page-center">
+      <div className="page-center" style={{ paddingBottom: '120px' }}>
         <div className="card" style={{ width: 'min(980px, 92vw)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -138,6 +138,7 @@ const ProfilePage: React.FC = () => {
             )}
           </div>
         </div>
+        <div className="mobile-ad-spacer"></div>
       </div>
 
       <div style={{ position: 'fixed', bottom: 16, left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 50, padding: '0 24px' }}>

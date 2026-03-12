@@ -45,7 +45,7 @@ const LoginPage: React.FC = () => {
 
   return (
     <RomanticLayout showNavbar={false}>
-      <div className="page-center">
+      <div className="page-center" style={{ paddingBottom: '120px' }}>
         <div className="card">
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
             <div style={{ fontSize: 38, marginBottom: 12 }}>❤️</div>
@@ -83,6 +83,7 @@ const LoginPage: React.FC = () => {
             Don&apos;t have an account? <Link to="/signup" className="helper-link">Sign Up</Link>
           </p>
         </div>
+        <div className="mobile-ad-spacer"></div>
       </div>
 
       <div style={{ position: 'fixed', bottom: 16, left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 50, padding: '0 24px' }}>
