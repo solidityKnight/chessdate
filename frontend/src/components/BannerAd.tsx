@@ -6,41 +6,8 @@ const BannerAd: React.FC = () => {
   const location = useLocation();
 
   useEffect(() => {
-    // Exclude the BannerAd from the landing page as requested
-    if (location.pathname === '/') return;
-
-    const bannerElem = containerRef.current;
-    if (!bannerElem) return;
-
-    // A small timeout ensures React finishes its render cycle before we manipulate the DOM
-    const t = setTimeout(() => {
-      // Clear previous ad debris
-      bannerElem.innerHTML = '';
-
-      // The ad network requires `atOptions` to be set on the global window object.
-      // We safely attach it for the 468x60 banner.
-      (window as any).atOptions = {
-        'key' : '9eb1615aebc7ae1feb66fcdc6363aae9',
-        'format' : 'iframe',
-        'height' : 60,
-        'width' : 468,
-        'params' : {}
-      };
-
-      // Create and inject the network script specifically for this format
-      const script = document.createElement('script');
-      script.async = true;
-      script.src = 'https://www.highperformanceformat.com/9eb1615aebc7ae1feb66fcdc6363aae9/invoke.js';
-      
-      bannerElem.appendChild(script);
-    }, 100);
-
-    return () => {
-      clearTimeout(t);
-      if (bannerElem) {
-        bannerElem.innerHTML = '';
-      }
-    };
+    // Ad loading logic removed to prevent errors and improve performance
+    return () => {};
   }, [location.pathname]);
 
   // If on landing page, render nothing.

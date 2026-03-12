@@ -125,6 +125,7 @@ class BotService {
         await matchmakingService.removeFromQueue(socketId);
       } catch (err) {
         console.error('Bot game start error:', err);
+        socket.emit('error', { message: 'Failed to start bot match. Please try again.' });
         // If it failed, we could optionally leave them in queue or notify them.
         // For now, we just log the error. The player is still in the queue
         // so a real match might still happen, or they can cancel.

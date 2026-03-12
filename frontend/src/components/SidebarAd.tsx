@@ -6,39 +6,8 @@ const SidebarAd: React.FC = () => {
   const location = useLocation();
 
   useEffect(() => {
-    // The user requested NO sidebar ad on Landing, Login, or Play pages
-    const restrictedRoutes = ['/', '/login', '/play'];
-    if (restrictedRoutes.includes(location.pathname)) return;
-
-    const bannerElem = containerRef.current;
-    if (!bannerElem) return;
-
-    // Small delay to ensure the React DOM represents the final layout before execution
-    const t = setTimeout(() => {
-      bannerElem.innerHTML = '';
-
-      // The ad network config for the tall skyscraper ad
-      (window as any).atOptions = {
-        'key' : '69a4ff78d56e2c0548171ca96c87c0fe',
-        'format' : 'iframe',
-        'height' : 600,
-        'width' : 160,
-        'params' : {}
-      };
-
-      const script = document.createElement('script');
-      script.async = true;
-      script.src = 'https://www.highperformanceformat.com/69a4ff78d56e2c0548171ca96c87c0fe/invoke.js';
-      
-      bannerElem.appendChild(script);
-    }, 150);
-
-    return () => {
-      clearTimeout(t);
-      if (bannerElem) {
-        bannerElem.innerHTML = '';
-      }
-    };
+    // Ad loading logic removed to prevent errors and improve performance
+    return () => {};
   }, [location.pathname]);
 
   const restrictedRoutes = ['/', '/login', '/play'];
