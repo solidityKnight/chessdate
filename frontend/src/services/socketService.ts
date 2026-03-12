@@ -48,8 +48,13 @@ class SocketService {
 
     console.log(`🔌 Socket: Initializing connection... (Target: ${backendUrl})`);
 
+    const transports =
+      window.location.hostname === 'localhost'
+        ? ['websocket', 'polling']
+        : ['polling', 'websocket'];
+
     this.socket = io(backendUrl, {
-      transports: ['websocket', 'polling'],
+      transports,
       timeout: 20_000,
       reconnection: true,
       reconnectionAttempts: this.maxReconnectAttempts,

@@ -120,7 +120,7 @@ const io = socketIo(server, {
   /*
    * FIX: list websocket first so Railway's proxy upgrades immediately.
    */
-  transports:   ['websocket', 'polling'],
+  transports:   ['polling', 'websocket'],
   allowEIO3:    true,
   pingTimeout:  60_000,
   pingInterval: 25_000,
