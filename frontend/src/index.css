@@ -251,11 +251,11 @@ nav a:hover {
 }
 
 .light {
-  background: var(--surface-1);
+  background: #f0d9b5; /* Standard chess light square */
 }
 
 .dark {
-  background: #ffb0c0;
+  background: #b58863; /* Standard chess dark square */
 }
 
 .square {

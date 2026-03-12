@@ -67,10 +67,8 @@ export const isValidSquare = (square: string): boolean => {
 
 /**
  * Return true when the square at (file, rank) is a light square.
- *
- * BUG FIX: the original returned `(file + rank) % 2 === 0`, which labels
- * a1 (file 0, rank 0) as light.  In standard chess a1 is a DARK square.
- * The correct parity is `(file + rank) % 2 !== 0`.
+ * In standard chess, a1 (0,0) is a DARK square.
+ * Light squares are those where (file + rank) is odd.
  */
 export const isLightSquare = (file: number, rank: number): boolean => {
   return (file + rank) % 2 !== 0;
