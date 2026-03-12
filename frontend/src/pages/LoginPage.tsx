@@ -4,6 +4,7 @@ import { useGameStore } from '../store/gameStore';
 import api from '../services/apiService';
 import RomanticLayout from '../components/RomanticLayout';
 import RomanticButton from '../components/RomanticButton';
+import AdBanner from '../components/AdBanner';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -82,6 +83,7 @@ const LoginPage: React.FC = () => {
             Don&apos;t have an account? <Link to="/signup" className="helper-link">Sign Up</Link>
           </p>
         </div>
+        <AdBanner />
       </div>
     </RomanticLayout>
   );

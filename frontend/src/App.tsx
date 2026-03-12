@@ -10,6 +10,7 @@ import SignUpPage from './pages/SignUpPage';
 import ProfilePage from './pages/ProfilePage';
 import AdminDashboard from './pages/AdminDashboard';
 import AchievementPopup from './components/AchievementPopup';
+import PopunderAd from './components/PopunderAd';
 
 import { useGameStore } from './store/gameStore';
 import api from './services/apiService';
@@ -73,6 +74,7 @@ function App() {
       <Router>
         <div className="App">
           <AchievementPopup />
+          <PopunderAd />
           <Routes>
             <Route path="/" element={<RomanticLandingPage />} />
             <Route path="/play" element={token ? <PlayPage /> : <Navigate to="/login" />} />
