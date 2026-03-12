@@ -5,6 +5,7 @@ import api from '../services/apiService';
 import RomanticLayout from '../components/RomanticLayout';
 import RomanticButton from '../components/RomanticButton';
 import AdBanner from '../components/AdBanner';
+import AdminBotToggle from '../components/AdminBotToggle';
 
 const AdminDashboard: React.FC = () => {
   const { user } = useGameStore();
@@ -98,6 +99,11 @@ const AdminDashboard: React.FC = () => {
             <div className="message" style={{ borderRadius: 18 }}><span>Total Users:</span> {stats?.totalUsers || 0}<div className="timestamp">overview</div></div>
             <div className="message" style={{ borderRadius: 18 }}><span>Total Games:</span> {stats?.totalGames || 0}<div className="timestamp">overview</div></div>
             <div className="message" style={{ borderRadius: 18 }}><span>Active Games:</span> {stats?.activeGames || 0}<div className="timestamp">overview</div></div>
+          </div>
+
+          {/* ─── AI Bot System Toggle ───────────────────────────── */}
+          <div style={{ marginTop: 18 }}>
+            <AdminBotToggle />
           </div>
 
           <div style={{ marginTop: 22 }}>

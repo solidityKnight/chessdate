@@ -14,21 +14,6 @@ exports.regenerateCredits = async (user) => {
     return user;
   }
 
-  const now = new Date();
-  const lastRegen = new Date(user.lastCreditRegen);
-  const diffInMs = now - lastRegen;
-  const sixHoursInMs = 6 * 60 * 60 * 1000;
-
-  if (diffInMs >= sixHoursInMs) {
-    const creditsToGain = Math.floor(diffInMs / sixHoursInMs);
-    const newCredits = Math.min(5, user.credits + creditsToGain);
-    
-    user.credits = newCredits;
-    // Update last regen to either now or the last interval point
-    user.lastCreditRegen = new Date(lastRegen.getTime() + (creditsToGain * sixHoursInMs));
-    await user.save();
-  }
-
   return user;
 };
 

@@ -1,6 +1,7 @@
 const sequelize = require('../config/database');
 const User = require('./User');
 const Game = require('./Game');
+const SystemSettings = require('./SystemSettings');
 
 // Define relationships
 User.hasMany(Game, { foreignKey: 'whitePlayerId', as: 'whiteGames' });
@@ -12,7 +13,9 @@ Game.belongsTo(User, { foreignKey: 'winnerId', as: 'winner' });
 const db = {
   sequelize,
   User,
-  Game
+  Game,
+  SystemSettings,
 };
 
 module.exports = db;
+

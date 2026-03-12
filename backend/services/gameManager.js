@@ -210,12 +210,26 @@ class GameManager {
         chatMessages: [],
         createdAt:    Date.now(),
         lastMoveAt:   Date.now(),
+        whiteTime:    600 * 1000,
+        blackTime:    600 * 1000,
       };
+
+      // Detect bot games (bot userIds start with 'bot-')
+      const isWhiteBot = (gameState.userIds.white || '').startsWith('bot-');
+      const isBlackBot = (gameState.userIds.black || '').startsWith('bot-');
+      gameState.isBotGame = isWhiteBot || isBlackBot;
 
       await this._save(gameId, gameState);
 
-      // Persist to PostgreSQL
-      if (gameState.userIds.white && gameState.userIds.black) {
+      if (gameState.isBotGame) {
+        // Bot game — skip PostgreSQL. Only deduct credits for the human player.
+        const humanUserId = isWhiteBot ? gameState.userIds.black : gameState.userIds.white;
+        if (humanUserId) {
+          const humanUser = await User.findByPk(humanUserId);
+          if (humanUser) await creditSystem.deductGame(humanUser);
+        }
+      } else if (gameState.userIds.white && gameState.userIds.black) {
+        // Real game — persist to PostgreSQL and deduct credits for both.
         await Game.create({
           gameId,
           whitePlayerId: gameState.userIds.white,
@@ -226,7 +240,6 @@ class GameManager {
           startedAt: new Date()
         });
 
-        // Deduct credits for both players
         const whiteUser = await User.findByPk(gameState.userIds.white);
         const blackUser = await User.findByPk(gameState.userIds.black);
         
@@ -342,6 +355,21 @@ class GameManager {
       const moveOpts = { from, to };
       if (promotion) moveOpts.promotion = promotion.toLowerCase();
 
+      const turnBeforeMove = game.chess.turn();
+      const now = Date.now();
+      
+      // Calculate elapsed time only if there is a previous move or wait, first move?
+      // For simplicity, lastMoveAt is createdAt initially, so elapsed time counts from the start.
+      const elapsed = now - gameState.lastMoveAt;
+
+      if (turnBeforeMove === 'w') {
+        gameState.whiteTime -= elapsed;
+        if (gameState.whiteTime < 0) gameState.whiteTime = 0;
+      } else {
+        gameState.blackTime -= elapsed;
+        if (gameState.blackTime < 0) gameState.blackTime = 0;
+      }
+
       const move = game.chess.move(moveOpts);
       if (!move) {
         throw new Error(`Illegal move: ${from}-${to}`);
@@ -361,7 +389,12 @@ class GameManager {
       gameState.lastMoveAt = Date.now();
 
       // 4. Evaluate game-over conditions in the right priority order.
-      if (game.chess.isGameOver()) {
+      if (gameState.whiteTime <= 0 || gameState.blackTime <= 0) {
+        gameState.status = 'finished';
+        game.status      = 'finished';
+        gameState.result = 'timeout';
+        gameState.winner = gameState.whiteTime <= 0 ? 'black' : 'white';
+      } else if (game.chess.isGameOver()) {
         gameState.status = 'finished';
         game.status      = 'finished';
 
@@ -404,6 +437,69 @@ class GameManager {
       return { move, gameState };
     } catch (err) {
       console.error('makeMove error:', err);
+      throw err;
+    }
+  }
+
+  /**
+   * Claim a timeout if the opponent's time has run out.
+   */
+  async claimTimeout(gameId, io) {
+    try {
+      const gameState = await this.getGameState(gameId, true);
+      if (!gameState || gameState.status !== 'active') {
+        throw new Error(`Game ${gameId} not active`);
+      }
+
+      const game = this.games.get(gameId);
+      if (!game || game.status !== 'active') {
+        throw new Error(`Game ${gameId} not active`);
+      }
+
+      const turn = game.chess.turn();
+      const now = Date.now();
+      const elapsed = now - gameState.lastMoveAt;
+
+      let timedOut = false;
+      if (turn === 'w') {
+        if (gameState.whiteTime - elapsed <= 0) {
+          gameState.whiteTime = 0;
+          gameState.status = 'finished';
+          gameState.result = 'timeout';
+          gameState.winner = 'black';
+          game.status = 'finished';
+          timedOut = true;
+        }
+      } else {
+        if (gameState.blackTime - elapsed <= 0) {
+          gameState.blackTime = 0;
+          gameState.status = 'finished';
+          gameState.result = 'timeout';
+          gameState.winner = 'white';
+          game.status = 'finished';
+          timedOut = true;
+        }
+      }
+
+      if (timedOut) {
+        await this._save(gameId, gameState);
+
+        // Sync with PostgreSQL
+        if (gameState.userIds && gameState.userIds.white && gameState.userIds.black) {
+          const gameUpdate = {
+            status: 'finished',
+            result: 'timeout',
+            winnerId: gameState.winner === 'white' ? gameState.userIds.white : gameState.userIds.black,
+            endedAt: new Date()
+          };
+          await Game.update(gameUpdate, { where: { gameId } });
+          await this._updateUserStats(gameState, io);
+        }
+        return gameState;
+      }
+      return null;
+    } catch (err) {
+      console.error('claimTimeout error:', err);
       throw err;
     }
   }

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useChessGame } from '../hooks/useChessGame';
 import { useGameStore } from '../store/gameStore';
 import { coordsToSquare, getPieceSymbol, isLightSquare, parseFEN } from '../utils/chessHelpers';
+import { PlayerTimer } from './PlayerTimer';
 
 type RomanticChessboardProps = {
   interactive?: boolean;
@@ -12,6 +13,7 @@ const RomanticChessboard: React.FC<RomanticChessboardProps> = ({ interactive = t
   const currentGame = useGameStore((s) => s.currentGame);
   const { selectSquare, selectedSquare, possibleMoves } = useChessGame();
   const flipped = currentGame?.playerColor === 'black';
+  const turn = currentGame?.board?.split(' ')[1] || 'w';
 
   const board = useMemo(() => {
     if (!currentGame?.board) return null;
@@ -51,7 +53,9 @@ const RomanticChessboard: React.FC<RomanticChessboardProps> = ({ interactive = t
   return (
     <div className="chess-area">
       {showHeartGlow && <div className="heart-bg"></div>}
-      <div className="board">
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+        {currentGame && <PlayerTimer color={flipped ? 'white' : 'black'} active={flipped ? turn === 'w' : turn === 'b'} />}
+        <div className="board">
         {squares.map((sq) => (
           <div
             key={sq.key}
@@ -68,6 +72,8 @@ const RomanticChessboard: React.FC<RomanticChessboardProps> = ({ interactive = t
             )}
           </div>
         ))}
+        </div>
+        {currentGame && <PlayerTimer color={flipped ? 'black' : 'white'} active={flipped ? turn === 'b' : turn === 'w'} />}
       </div>
     </div>
   );

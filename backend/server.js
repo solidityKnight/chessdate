@@ -16,6 +16,8 @@ const chatSocket        = require('./sockets/chatSocket');
 // Import services
 const matchmakingService          = require('./services/matchmakingService');
 const gameManager                 = require('./services/gameManager');
+const botService                  = require('./services/BotService');
+const settingsService             = require('./services/SettingsService');
 const { redisClient, connectRedis } = require('./redis/redisClient');
 const { sequelize, User }         = require('./models');
 const jwt                         = require('jsonwebtoken');
@@ -117,9 +119,6 @@ const io = socketIo(server, {
     methods:     ['GET', 'POST'],
     credentials: true,
   },
-  /*
-   * FIX: list websocket first so Railway's proxy upgrades immediately.
-   */
   transports:   ['polling', 'websocket'],
   allowEIO3:    true,
   pingTimeout:  60_000,
@@ -143,7 +142,6 @@ app.use((req, res, next) => {
 });
 
 app.use(helmet({
-  // Relax CSP for development/production debugging
   contentSecurityPolicy: false,
   crossOriginEmbedderPolicy: false,
 }));
@@ -185,16 +183,15 @@ connectRedis().catch((err) => {
 // ─── Database (PostgreSQL) ───────────────────────────────────────────────────
 
 sequelize.sync({ alter: true })
-  .then(() => console.log('✅ PostgreSQL connected and synced'))
+  .then(async () => {
+    console.log('✅ PostgreSQL connected and synced');
+    // Load system settings into memory cache
+    await settingsService.loadAll();
+  })
   .catch(err => console.error('❌ PostgreSQL connection error:', err));
 
 // ─── Frontend static files ────────────────────────────────────────────────────
 
-/*
- * FIX: Reliable static file serving for Railway.
- * We resolve the path relative to the process root (cwd) for better consistency
- * during Railway builds and deployments.
- */
 const repoRoot  = path.resolve(__dirname, '..');
 const staticPath = path.resolve(repoRoot, 'frontend', 'build');
 
@@ -206,27 +203,22 @@ console.log('   - Static Path:', staticPath);
 console.log('   - Static Files Check:', fs.existsSync(path.join(staticPath, 'index.html')) ? '✅ Found index.html' : '❌ index.html NOT FOUND');
 
 if (fs.existsSync(path.join(staticPath, 'index.html'))) {
-  // Use long-lived caching for static assets in production, but no cache for index.html
   app.use(express.static(staticPath, {
     maxAge: '1d',
-    index:  false, // We handle index.html manually via the catch-all
+    index:  false,
   }));
 
-  // Catch-all: return index.html for any non-API route (React Router support)
   app.get('*', (req, res) => {
-    // Skip if it's an API-like route or socket.io
     if (req.path.startsWith('/health') ||
         req.path.startsWith('/debug')  ||
         req.path.startsWith('/socket.io')) {
       return res.status(404).json({ error: 'Not found' });
     }
     
-    // Log what requests are hitting the catch-all
     if (req.path.includes('.') && !req.path.endsWith('.html')) {
       console.warn(`⚠️ Request for asset ${req.path} fell through to catch-all. This usually means express.static failed to find it in ${staticPath}`);
     }
     
-    // Serve index.html with no-cache headers to ensure users always get the latest version
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.sendFile(path.join(staticPath, 'index.html'), (err) => {
       if (err) {
@@ -258,7 +250,6 @@ io.use(async (socket, next) => {
       console.error('Socket Auth Error:', err.message);
     }
   }
-  // For now, allow unauthenticated connections but mark them as guests
   socket.user = null;
   next();
 });
@@ -272,6 +263,10 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', async (reason) => {
     console.log(`🔌 Disconnected: ${socket.id}, reason: ${reason}`);
+
+    // Cancel any pending bot fallback timer
+    botService.cancelFallbackTimer(socket.id);
+
     await matchmakingService.removeFromQueue(socket.id);
     gameManager.handlePlayerDisconnect(socket.id, io);
   });
@@ -283,8 +278,6 @@ io.on('connection', (socket) => {
 
 // ─── Start ────────────────────────────────────────────────────────────────────
 
-// For Railway, we MUST listen on the provided PORT and ideally on 0.0.0.0
-// to allow the proxy to reach the container.
 server.on('error', (err) => {
   if (err && err.code === 'EADDRINUSE') {
     console.error(`❌ Port ${PORT} is already in use. Stop the process using it or set a different PORT (e.g. 4001) and restart.`);

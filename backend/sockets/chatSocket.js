@@ -1,4 +1,5 @@
 const gameManager = require('../services/gameManager');
+const botService  = require('../services/BotService');
 
 function chatSocket(socket, io) {
   // Handle chat messages
@@ -39,6 +40,11 @@ function chatSocket(socket, io) {
         message: chatMessage.message,
         timestamp: chatMessage.timestamp
       });
+
+      // If this is a bot game, route the message to the bot chat system
+      if (botService.isBotGame(gameId)) {
+        botService.onPlayerChat(gameId, io, chatMessage.message);
+      }
 
     } catch (error) {
       console.error('Error sending chat message:', error);

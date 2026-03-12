@@ -4,6 +4,7 @@ const matchmakingService = require('../services/matchmakingService');
 const gameManager        = require('../services/gameManager');
 const aiService          = require('../services/aiService');
 const creditSystem       = require('../utils/creditSystem');
+const botService         = require('../services/BotService');
 
 function matchmakingSocket(socket, io) {
 
@@ -20,16 +21,8 @@ function matchmakingSocket(socket, io) {
       await creditSystem.regenerateCredits(socket.user);
 
       if (!creditSystem.canPlay(socket.user)) {
-        // Calculate remaining time for regen
-        const now = new Date();
-        const lastRegen = new Date(socket.user.lastCreditRegen);
-        const nextRegen = new Date(lastRegen.getTime() + (6 * 60 * 60 * 1000));
-        const diff = nextRegen - now;
-        const hours = Math.floor(diff / (1000 * 60 * 60));
-        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-        
         socket.emit('error', { 
-          message: `You have run out of credits. Please come back in ${hours}h ${minutes}m.` 
+          message: 'You have run out of credits.' 
         });
         return;
       }
@@ -44,6 +37,10 @@ function matchmakingSocket(socket, io) {
       const match = await matchmakingService.addToQueue(socket.id, gender, socket.user.id);
 
       if (match) {
+        // Real match found — cancel any pending bot fallback for BOTH players
+        botService.cancelFallbackTimer(match.players.white.socketId);
+        botService.cancelFallbackTimer(match.players.black.socketId);
+
         const gameState = await gameManager.createGame(match.gameId, match.players);
         const pickUpLine = await aiService.generateChessPickUpLine();
 
@@ -64,17 +61,11 @@ function matchmakingSocket(socket, io) {
             white: whiteSocketId,
             black: blackSocketId,
           },
+          whiteTime:  gameState.whiteTime,
+          blackTime:  gameState.blackTime,
+          lastMoveAt: gameState.lastMoveAt,
         };
 
-        /*
-         * BUG FIX: the original emitted game_start to the whole room via
-         * io.to(gameId).emit(...) with a single playerColor value derived
-         * from the *current* socket.  Both players received the same color,
-         * so the second player always saw the board from White's perspective
-         * and their turn guard never allowed them to move.
-         *
-         * Fix: emit individually to each socket with their correct color.
-         */
         io.to(whiteSocketId).emit('game_start', {
           ...commonPayload,
           playerColor:   'white',
@@ -90,6 +81,9 @@ function matchmakingSocket(socket, io) {
         console.log(`Game ${match.gameId} started — white: ${whiteSocketId}, black: ${blackSocketId}`);
 
       } else {
+        // No match found — start bot fallback timer (7–16 seconds)
+        botService.startFallbackTimer(socket.id, socket, io, gender);
+
         socket.emit('waiting_for_match', {
           message:       'Waiting for an opponent...',
           queuePosition: await matchmakingService.getQueueStats(),
@@ -103,6 +97,8 @@ function matchmakingSocket(socket, io) {
 
   socket.on('cancel_matchmaking', async () => {
     try {
+      // Cancel bot fallback timer
+      botService.cancelFallbackTimer(socket.id);
       await matchmakingService.removeFromQueue(socket.id);
       socket.emit('matchmaking_cancelled', { message: 'Matchmaking cancelled' });
     } catch (error) {

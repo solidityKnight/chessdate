@@ -27,10 +27,6 @@ export interface ChatMessage {
   timestamp:   number;
 }
 
-/**
- * FIX: added `moves` and `gameStatus` which were missing from the original
- * type, causing TS2339 errors in ChessBoard.tsx.
- */
 export interface CurrentGame {
   gameId:        string;
   playerColor:   'white' | 'black';
@@ -42,6 +38,9 @@ export interface CurrentGame {
   moves:         MoveRecord[];
   gameStatus:    GameStatus;
   pickUpLine?:   string;
+  whiteTime?:    number;
+  blackTime?:    number;
+  lastMoveAt?:   number;
 }
 
 export interface User {
@@ -91,13 +90,7 @@ interface GameStore {
   setCurrentGame:    (game: CurrentGame | null) => void;
   setRematchStatus:  (status: 'none' | 'requested' | 'received' | 'declined') => void;
   setAuthLoading:    (isLoading: boolean) => void;
-  /**
-   * FIX: updateBoard now accepts an optional move record and gameStatus so
-   * board, move history, and status are updated atomically in one set() call.
-   * Previously they were applied in separate calls, leaving the store
-   * partially updated between renders.
-   */
-  updateBoard:    (board: string, move?: MoveRecord, gameStatus?: GameStatus) => void;
+  updateBoard:    (board: string, move?: MoveRecord, gameStatus?: GameStatus, timeUpdate?: { whiteTime?: number, blackTime?: number, lastMoveAt?: number }) => void;
   setGameStatus:  (status: 'waiting' | 'active' | 'finished', winner?: 'white' | 'black', result?: string) => void;
   addChatMessage: (message: ChatMessage) => void;
   setConnected:   (connected: boolean) => void;
@@ -144,7 +137,7 @@ export const useGameStore = create<GameStore>()(
         setRematchStatus:  (rematchStatus)  => set({ rematchStatus }),
         setAuthLoading:    (isAuthLoading)  => set({ isAuthLoading }),
 
-        updateBoard: (board, move, gameStatus) =>
+        updateBoard: (board, move, gameStatus, timeUpdate) =>
           set((state) => {
             if (!state.currentGame) return state;
             return {
@@ -153,6 +146,7 @@ export const useGameStore = create<GameStore>()(
                 board,
                 ...(move       ? { moves: [...state.currentGame.moves, move] } : {}),
                 ...(gameStatus ? { gameStatus }                                : {}),
+                ...(timeUpdate ? { ...timeUpdate }                             : {}),
               },
             };
           }),
@@ -169,12 +163,6 @@ export const useGameStore = create<GameStore>()(
 
         setConnected: (isConnected) => set({ isConnected }),
         setError:     (error)       => set({ error }),
-        /**
-         * FIX: reset() now preserves the current connection state.
-         * When a game ends and the player requests a new match, we clear the game
-         * and matchmaking state, but the socket connection should remain active
-         * so the player can immediately rejoin matchmaking without a reconnection delay.
-         */
         reset:        () => set((state) => ({
           ...initialState,
           isConnected: state.isConnected, // Preserve connection state
@@ -191,7 +179,6 @@ export const useGameStore = create<GameStore>()(
           token: state.token, 
           currentGame: state.currentGame 
         }),
-        // Ensure isAuthLoading is NOT persisted
         onRehydrateStorage: () => (state) => {
           if (state) state.setAuthLoading(!!state.token && !state.user);
         }

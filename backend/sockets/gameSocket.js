@@ -3,6 +3,7 @@
 const gameManager  = require('../services/gameManager');
 const chessService = require('../services/chessService');
 const aiService    = require('../services/aiService');
+const botService   = require('../services/BotService');
 
 /**
  * Attach all chess-game socket event handlers to a single socket.
@@ -108,6 +109,9 @@ function gameSocket(socket, io) {
         board:      gameState.board,
         player:     playerColor,
         gameStatus,
+        whiteTime:  gameState.whiteTime,
+        blackTime:  gameState.blackTime,
+        lastMoveAt: gameState.lastMoveAt,
       });
 
       if (gameState.status === 'finished') {
@@ -116,6 +120,18 @@ function gameSocket(socket, io) {
           result:     gameState.result,
           finalBoard: gameState.board,
         });
+
+        // Clean up bot game if applicable
+        if (botService.isBotGame(gameId)) {
+          setTimeout(() => {
+            gameManager.cleanupGame(gameId);
+            botService.cleanupBotGame(gameId);
+          }, 60_000);
+        }
+      } else if (botService.isBotGame(gameId)) {
+        // Trigger the bot's reply move (with human-like delay)
+        const fenBefore = guard.gameState.board; // FEN before the player's move
+        botService.onPlayerMove(gameId, io, fenBefore, gameState.board, move.san);
       }
     } catch (err) {
       console.error('make_move error:', err);
@@ -168,6 +184,36 @@ function gameSocket(socket, io) {
     } catch (err) {
       console.error('resign_game error:', err);
       emitError('resign_game', 'Failed to resign game');
+    }
+  });
+
+  // ─── claim_timeout ────────────────────────────────────────────────────────
+
+  socket.on('claim_timeout', async (data) => {
+    try {
+      const { gameId } = data ?? {};
+      if (!gameId) {
+        emitError('claim_timeout', 'Missing required field: gameId');
+        return;
+      }
+
+      const guard = await guardActivePlayer(gameId, 'claim_timeout');
+      if (!guard) return;
+
+      const gameState = await gameManager.claimTimeout(gameId, io);
+
+      if (gameState && gameState.status === 'finished') {
+        io.to(gameId).emit('game_over', {
+          winner:     gameState.winner,
+          result:     'timeout',
+          finalBoard: gameState.board,
+        });
+
+        setTimeout(() => gameManager.cleanupGame(gameId), 60_000);
+      }
+    } catch (err) {
+      console.error('claim_timeout error:', err);
+      emitError('claim_timeout', 'Failed to claim timeout');
     }
   });
 

@@ -140,6 +140,26 @@ export const useChessGame = () => {
     [selectedSquare, possibleMoves, makeMove, currentGame, playerColor],
   );
 
+  // ─── timeout watcher ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!currentGame || currentGame.status !== 'active') return;
+    if (currentGame.whiteTime === undefined || currentGame.blackTime === undefined) return;
+    
+    const turn = currentGame.board.split(' ')[1]; // 'w' or 'b'
+    const activeColor = turn === 'w' ? 'white' : 'black';
+    const timeRemaining = activeColor === 'white' ? currentGame.whiteTime : currentGame.blackTime;
+    
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - (currentGame.lastMoveAt || Date.now());
+      if (timeRemaining - elapsed <= 0) {
+        socketService.emit('claim_timeout', { gameId: currentGame.gameId });
+        clearInterval(interval);
+      }
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [currentGame]);
+
   // ─── resignGame ───────────────────────────────────────────────────────────
   const resignGame = useCallback(() => {
     if (!currentGame || currentGame.status !== 'active') return;
