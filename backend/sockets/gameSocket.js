@@ -281,6 +281,88 @@ function gameSocket(socket, io) {
       const gameState = await gameManager.getGameState(gameId);
       if (!gameState) return;
 
+      // Special handling for bot games: automatically accept and start
+      if (botService.isBotGame(gameId)) {
+        const botGame = botService.getBotGame(gameId);
+        if (!botGame) return;
+
+        // Swap colors for rematch
+        const nextWhiteSocketId = botGame.humanColor === 'white' ? botGame.botPlayer.socketId : botGame.humanSocketId;
+        const nextBlackSocketId = botGame.humanColor === 'white' ? botGame.humanSocketId : botGame.botPlayer.socketId;
+
+        const players = {
+          white: { 
+            socketId: nextWhiteSocketId, 
+            userId: nextWhiteSocketId.startsWith('bot') ? botGame.botPlayer.userId : (socket.user?.id || null)
+          },
+          black: { 
+            socketId: nextBlackSocketId, 
+            userId: nextBlackSocketId.startsWith('bot') ? botGame.botPlayer.userId : (socket.user?.id || null)
+          },
+          botName: botGame.botPlayer.name
+        };
+
+        const newGameId = `game_${Date.now()}_bot_rematch`;
+        const newGameState = await gameManager.createGame(newGameId, players);
+        const pickUpLine = await aiService.generateChessPickUpLine();
+
+        const humanColor = botGame.humanColor === 'white' ? 'black' : 'white';
+        const botColor   = botGame.humanColor === 'white' ? 'white' : 'black';
+
+        socket.join(newGameId);
+
+        const commonPayload = {
+          gameId: newGameId,
+          board: newGameState.board,
+          pickUpLine,
+          players: {
+            white: players.white.socketId,
+            black: players.black.socketId,
+          },
+          whiteTime:  newGameState.whiteTime,
+          blackTime:  newGameState.blackTime,
+          lastMoveAt: newGameState.lastMoveAt,
+        };
+
+        // Notify human player
+        socket.emit('game_start', {
+          ...commonPayload,
+          playerColor: humanColor,
+          opponentColor: botColor,
+        });
+
+        // Initialize new bot session
+        botService.botGames.set(newGameId, {
+          difficulty: botGame.difficulty,
+          botPlayer: botGame.botPlayer,
+          botColor,
+          humanSocketId: socket.id,
+          humanColor,
+          pendingMoveTimer: null,
+        });
+
+        const botMsgGenerator = require('../services/BotMessageGenerator');
+        botMsgGenerator.initSession(newGameId, {
+          botGender: botGame.botPlayer.gender,
+          botName: botGame.botPlayer.name,
+          botColor,
+          botSocketId: botGame.botPlayer.socketId,
+          humanSocketId: socket.id,
+        });
+
+        botMsgGenerator.scheduleGreeting(newGameId, io);
+
+        if (botColor === 'white') {
+          botService._scheduleBotMove(newGameId, io, 'normal');
+        }
+
+        // Cleanup old room
+        socket.leave(gameId);
+        await gameManager.cleanupGame(gameId);
+        botService.cleanupBotGame(gameId);
+        return;
+      }
+
       socket.to(gameId).emit('rematch_requested', { from: socket.id });
     } catch (err) {
       console.error('request_rematch error:', err);

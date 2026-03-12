@@ -127,7 +127,6 @@ class BotService {
         await this.startBotGame(socket, io, playerGender);
       } catch (err) {
         console.error('Bot game start error:', err);
-        socket.emit('error', { message: 'Failed to start bot match' });
       }
     }, delay);
 
