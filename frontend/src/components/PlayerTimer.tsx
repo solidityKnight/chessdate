@@ -36,7 +36,7 @@ export const PlayerTimer: React.FC<PlayerTimerProps> = ({ color, active }) => {
     }, 100);
 
     return () => clearInterval(intervalId);
-  }, [active, timeRemaining, lastMoveAt, currentGame?.status]);
+  }, [active, timeRemaining, lastMoveAt, currentGame]);
 
   const isLowTime = displayMs < 60000; // less than 1 min
 
