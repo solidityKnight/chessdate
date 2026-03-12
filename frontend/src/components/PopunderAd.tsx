@@ -5,12 +5,23 @@ const PopunderAd: React.FC = () => {
   const location = useLocation();
 
   useEffect(() => {
-    // We do not want popunders on the landing page (which is strictly '/')
-    if (location.pathname === '/') return;
-
-    // We do not want to inject multiple times if navigating between non-landing pages
     const scriptId = 'effectivegate-popunder';
-    if (document.getElementById(scriptId)) return;
+    const existingScript = document.getElementById(scriptId);
+
+    // Restricted routes where we absolutely do NOT want popunders
+    const restrictedRoutes = ['/', '/play'];
+    const isRestricted = restrictedRoutes.includes(location.pathname);
+
+    if (isRestricted) {
+      // If we navigate to a restricted route and the script exists, remove it
+      if (existingScript) {
+        existingScript.remove();
+      }
+      return;
+    }
+
+    // If we are on an allowed page, only inject if it doesn't already exist
+    if (existingScript) return;
 
     const script = document.createElement('script');
     script.id = scriptId;
@@ -19,8 +30,9 @@ const PopunderAd: React.FC = () => {
 
     document.head.appendChild(script);
 
-    // Note: We don't remove the script on unmount/route change because 
-    // it's meant to be "one per page view" across the app minus the landing page.
+    // Note: We don't return a cleanup function here because we want the script
+    // to persist across ALLOWED route changes (e.g. going from /profile to /about).
+    // The explicit removal happens above when hitting a restricted route.
   }, [location.pathname]);
 
   return null;

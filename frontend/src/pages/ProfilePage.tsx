@@ -138,7 +138,12 @@ const ProfilePage: React.FC = () => {
             )}
           </div>
         </div>
-        <AdBanner />
+      </div>
+
+      <div style={{ position: 'fixed', bottom: 16, left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 50, padding: '0 24px' }}>
+        <div style={{ width: '100%', maxWidth: 400 }}>
+          <AdBanner />
+        </div>
       </div>
     </RomanticLayout>
   );
