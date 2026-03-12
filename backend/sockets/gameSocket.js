@@ -259,18 +259,33 @@ function gameSocket(socket, io) {
         return;
       }
 
-      const findSocketByUserId = (userId) => {
+      const nextWhiteUserId = gameState.userIds.black;
+      const nextBlackUserId = gameState.userIds.white;
+
+      const findSocketByUserIdInRoom = async (roomId, userId) => {
+        const socketIds = await io.in(roomId).allSockets();
+        for (const id of socketIds) {
+          const s = io.sockets.sockets.get(id);
+          if (s?.user?.id === userId) return s;
+        }
+        return null;
+      };
+
+      const findSocketByUserIdGlobal = (userId) => {
         for (const s of io.sockets.sockets.values()) {
           if (s?.user?.id === userId) return s;
         }
         return null;
       };
 
-      const nextWhiteUserId = gameState.userIds.black;
-      const nextBlackUserId = gameState.userIds.white;
-
-      const whiteSocket = findSocketByUserId(nextWhiteUserId) || io.sockets.sockets.get(gameState.players.black);
-      const blackSocket = findSocketByUserId(nextBlackUserId) || io.sockets.sockets.get(gameState.players.white);
+      const whiteSocket =
+        (await findSocketByUserIdInRoom(gameId, nextWhiteUserId)) ||
+        findSocketByUserIdGlobal(nextWhiteUserId) ||
+        io.sockets.sockets.get(gameState.players.black);
+      const blackSocket =
+        (await findSocketByUserIdInRoom(gameId, nextBlackUserId)) ||
+        findSocketByUserIdGlobal(nextBlackUserId) ||
+        io.sockets.sockets.get(gameState.players.white);
 
       if (!whiteSocket || !blackSocket) {
         emitError('accept_rematch', 'Opponent is not connected');
