@@ -117,16 +117,17 @@ class BotService {
     const timer = setTimeout(async () => {
       this.fallbackTimers.delete(socketId);
 
-      // Check if the player is still in queue (hasn't been matched or cancelled)
-      const matchmakingService = require('./matchmakingService');
-      // Remove from queue first
-      await matchmakingService.removeFromQueue(socketId);
-
       // Create and start a bot game
       try {
         await this.startBotGame(socket, io, playerGender);
+        // Remove from queue ONLY if bot game started successfully
+        const matchmakingService = require('./matchmakingService');
+        await matchmakingService.removeFromQueue(socketId);
       } catch (err) {
         console.error('Bot game start error:', err);
+        // If it failed, we could optionally leave them in queue or notify them.
+        // For now, we just log the error. The player is still in the queue
+        // so a real match might still happen, or they can cancel.
       }
     }, delay);
 

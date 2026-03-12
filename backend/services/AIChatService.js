@@ -31,8 +31,8 @@ try {
       if (tokens[i + 1] === '-' && tokens[i + 2]) {
         const name = tokens[i];
         const gender = tokens[i + 2].toLowerCase();
-        if (gender.includes('male')) botNames.male.push(name);
-        else if (gender.includes('female')) botNames.female.push(name);
+        if (gender === 'male') botNames.male.push(name);
+        else if (gender === 'female') botNames.female.push(name);
         i += 2; // skip past "- Gender"
       }
     }
