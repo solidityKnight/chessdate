@@ -327,7 +327,7 @@ class GameManager {
   async makeMove(gameId, from, to, promotion = null, io) {
     try {
       // 1. Ensure cache is populated (re-hydrates from Redis if needed).
-      let gameState = await this.getGameState(gameId);
+      let gameState = await this.getGameState(gameId, true);
       if (!gameState) {
         throw new Error(`Game ${gameId} not found`);
       }
@@ -418,7 +418,7 @@ class GameManager {
    */
   async resignGame(gameId, playerColor, io) {
     try {
-      const gameState = await this.getGameState(gameId);
+      const gameState = await this.getGameState(gameId, true);
       if (!gameState) {
         throw new Error(`Game ${gameId} not found`);
       }
@@ -527,7 +527,7 @@ class GameManager {
 
         if (game.status !== 'active') break;
 
-        const gameState = await this.getGameState(gameId);
+        const gameState = await this.getGameState(gameId, true);
         if (!gameState || gameState.status !== 'active') break;
 
         gameState.status            = 'finished';

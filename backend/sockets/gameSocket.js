@@ -358,7 +358,7 @@ function gameSocket(socket, io) {
         return;
       }
 
-      const gameState = await gameManager.getGameState(gameId);
+      const gameState = await gameManager.getGameState(gameId, true);
       if (!gameState) {
         socket.emit('ready_for_new_match');
         return;
