@@ -19,10 +19,10 @@ const RomanticLandingPage: React.FC = () => {
           <h1>
             <span>Castles,</span> knights,<br />butterflies in<br />stomach.
           </h1>
-          <p className="description">
+          <h2 className="description" style={{ fontWeight: 400, marginTop: 12 }}>
             Play chess with a stranger and chat during the match.<br />
             Checkmate their king… and maybe their heart.
-          </p>
+          </h2>
           <div className="buttons">
             <RomanticButton variant="primary" onClick={() => navigate(token ? '/play' : '/login')}>Play Now</RomanticButton>
             <RomanticButton variant="secondary" onClick={() => navigate('/guides')}>How It Works</RomanticButton>
