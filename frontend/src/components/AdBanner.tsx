@@ -1,49 +1,40 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 /**
- * ChessDate ad slot using an IFRAME isolation strategy.
- *
- * We:
- * - Load the provider's script securely within an iframe
- * - Isolate their dom-search behavior so React router transitions don't break
- * - Ensure clean garbage collection on unmount
+ * ChessDate ad slot
  */
 const AdBanner: React.FC = () => {
-  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const iframe = iframeRef.current;
-    if (!iframe) return;
+    const bannerElem = containerRef.current;
+    if (!bannerElem) return;
 
-    const doc = iframe.contentWindow?.document;
-    if (!doc) return;
+    // Use a small timeout to ensure the React mount cycle has fully completed
+    const t = setTimeout(() => {
+      // Clear out previous script tags or ad debris
+      bannerElem.innerHTML = '';
+      
+      // Inject exactly the HTML string requested by the user, forcing the browser to parse it natively
+      // Since innerHTML doesn't execute <script> tags, we have to use document contexts.
+      
+      const adContainer = document.createElement('div');
+      adContainer.id = 'container-b4fcdd67008c5670ef4321cf8b4a150e';
+      bannerElem.appendChild(adContainer);
 
-    // The raw HTML injected inside the iframe.
-    // Notice how we perfectly emulate the environment their script expects.
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <style>
-            body, html {
-              margin: 0;
-              padding: 0;
-              width: 100%;
-              height: 100%;
-              overflow: hidden;
-            }
-          </style>
-        </head>
-        <body>
-          <div id="container-b4fcdd67008c5670ef4321cf8b4a150e"></div>
-          <script async data-cfasync="false" src="https://pl28898793.effectivegatecpm.com/b4fcdd67008c5670ef4321cf8b4a150e/invoke.js"></script>
-        </body>
-      </html>
-    `;
+      const script = document.createElement('script');
+      script.async = true;
+      script.setAttribute('data-cfasync', 'false');
+      script.src = 'https://pl28898793.effectivegatecpm.com/b4fcdd67008c5670ef4321cf8b4a150e/invoke.js';
+      bannerElem.appendChild(script);
+    }, 100);
 
-    doc.open();
-    doc.write(htmlContent);
-    doc.close();
+    return () => {
+      clearTimeout(t);
+      if (bannerElem) {
+        bannerElem.innerHTML = '';
+      }
+    };
   }, []);
 
   return (
@@ -58,20 +49,8 @@ const AdBanner: React.FC = () => {
         overflow: 'hidden',
         minHeight: 60,
       }}
-    >
-      <iframe
-        ref={iframeRef}
-        title="AdSlot"
-        style={{
-          width: '100%',
-          height: '100%',
-          minHeight: '60px',
-          border: 'none',
-          display: 'block',
-        }}
-        sandbox="allow-scripts allow-top-navigation allow-top-navigation-by-user-activation allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-      />
-    </div>
+      ref={containerRef}
+    />
   );
 };
 
