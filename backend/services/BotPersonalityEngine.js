@@ -103,24 +103,27 @@ class BotPersonalityEngine {
    * @param {string} [params.lastMoveSan] - the last move in SAN notation
    * @param {'normal'|'strong'|'blunder'} [params.moveQuality] - quality of the last move
    * @param {number} [params.moveCount] - total moves played so far
-   * @param {'greeting'|'reaction'|'reply'|'instagram_ask'|'instagram_reply'} params.context
+   * @param {'greeting'|'reaction'|'reply'|'follow_up'|'instagram_ask'|'instagram_reply'} params.context
    * @returns {string} prompt
    */
   buildPrompt({
     personality,
     botGender,
+    botName,
     gameStatus,
     lastPlayerMessage,
     lastMoveSan,
     moveQuality,
     moveCount,
     context,
+    isFollowUp = false,
   }) {
     const genderLabel = botGender === 'female' ? 'female' : 'male';
     const opponentGender = botGender === 'female' ? 'male' : 'female';
 
-    let prompt = `You are a ${genderLabel} chess player chatting with a ${opponentGender} opponent during an online chess game.\n`;
-    prompt += `Your personality is ${personality.name.toUpperCase()}: ${personality.traits}.\n`;
+    let prompt = `You are playing a casual chess match on ChessDate. 
+Your name is ${botName || 'Aarav'}. You are ${genderLabel}.
+Your personality is ${personality.name.toUpperCase()}: ${personality.traits}.\n`;
     prompt += `You are currently ${gameStatus.toUpperCase()} the game.\n`;
 
     if (lastMoveSan) {
@@ -143,7 +146,10 @@ class BotPersonalityEngine {
         }\n`;
         break;
       case 'reply':
-        prompt += `Opponent said: "${lastPlayerMessage}". Reply naturally.\n`;
+        prompt += `Opponent said: "${lastPlayerMessage}". Reply naturally. If they ask for your name, tell them you are ${botName || 'Aarav'}.\n`;
+        break;
+      case 'follow_up':
+        prompt += `You are sending a follow-up message to what you just said. Keep it related and conversational. Do not repeat yourself.\n`;
         break;
       case 'instagram_ask':
         prompt += 'You want to casually ask the opponent for their Instagram handle. Be natural and brief.\n';

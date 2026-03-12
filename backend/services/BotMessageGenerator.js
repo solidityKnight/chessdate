@@ -89,8 +89,8 @@ class BotMessageGenerator {
     const session = this.sessions.get(gameId);
     if (!session) return;
 
-    // 40% chance to ignore
-    if (Math.random() < 0.40) {
+    // 30% chance to ignore (lowered from 40% for better engagement)
+    if (Math.random() < 0.30) {
       console.log(`💬 Bot ignoring message in game ${gameId}`);
       return;
     }
@@ -101,11 +101,31 @@ class BotMessageGenerator {
 
     const context = isInstaQuestion ? 'instagram_reply' : 'reply';
 
-    // Delay 5-9 seconds with typing indicator
-    const delay = 5000 + Math.random() * 4000;
-    this._scheduleWithTyping(gameId, io, delay, async () => {
-      await this._sendBotMessage(gameId, io, context, { lastPlayerMessage: playerMessage });
-    });
+    // Decide how many messages to send (1-3)
+    // 60% chance for 1 message, 30% for 2, 10% for 3
+    let numMessages = 1;
+    const r = Math.random();
+    if (r > 0.6 && r <= 0.9) numMessages = 2;
+    else if (r > 0.9) numMessages = 3;
+
+    let accumulatedDelay = 0;
+
+    for (let i = 0; i < numMessages; i++) {
+      // First message: 4-7 seconds. Subsequent messages: 3-5 seconds after the previous one.
+      const stepDelay = i === 0 ? (4000 + Math.random() * 3000) : (3000 + Math.random() * 2000);
+      accumulatedDelay += stepDelay;
+
+      // We use a separate closure for each message to ensure the context is correct
+      const isLast = (i === numMessages - 1);
+      const messageContext = (i === 0) ? context : 'follow_up';
+
+      this._scheduleWithTyping(gameId, io, accumulatedDelay, async () => {
+        await this._sendBotMessage(gameId, io, messageContext, { 
+          lastPlayerMessage: playerMessage,
+          isFollowUp: i > 0
+        });
+      });
+    }
   }
 
   /**
@@ -183,12 +203,14 @@ class BotMessageGenerator {
     const prompt = personalityEngine.buildPrompt({
       personality: session.personality,
       botGender: session.botGender,
+      botName: session.botName,
       gameStatus,
       lastPlayerMessage: extra.lastPlayerMessage || null,
       lastMoveSan: extra.lastMoveSan || null,
       moveQuality: extra.moveQuality || 'normal',
       moveCount: session.moveCount,
       context,
+      isFollowUp: extra.isFollowUp || false,
     });
 
     // Get AI response (or fallback)

@@ -26,13 +26,16 @@ try {
     const raw = fs.readFileSync(namesPath, 'utf8');
     // The format is "Name - Gender Name - Gender ..."
     // Split by whitespace and parse
-    const tokens = raw.split(/\s+/);
+    const tokens = raw.split(/\s+/).filter(t => t.length > 0);
     for (let i = 0; i < tokens.length; i++) {
       if (tokens[i + 1] === '-' && tokens[i + 2]) {
         const name = tokens[i];
         const gender = tokens[i + 2].toLowerCase();
-        if (gender === 'male') botNames.male.push(name);
-        else if (gender === 'female') botNames.female.push(name);
+        if (gender === 'male' || gender === 'male' || gender.startsWith('male')) {
+          botNames.male.push(name);
+        } else if (gender === 'female' || gender.startsWith('female')) {
+          botNames.female.push(name);
+        }
         i += 2; // skip past "- Gender"
       }
     }
