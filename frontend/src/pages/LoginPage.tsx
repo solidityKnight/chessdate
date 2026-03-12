@@ -4,7 +4,6 @@ import { useGameStore } from '../store/gameStore';
 import api from '../services/apiService';
 import RomanticLayout from '../components/RomanticLayout';
 import RomanticButton from '../components/RomanticButton';
-import AdBanner from '../components/AdBanner';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -45,7 +44,7 @@ const LoginPage: React.FC = () => {
 
   return (
     <RomanticLayout showNavbar={false}>
-      <div className="page-center" style={{ paddingBottom: '120px' }}>
+      <div className="page-center">
         <div className="card">
           <div style={{ textAlign: 'center', marginBottom: 18 }}>
             <div style={{ fontSize: 38, marginBottom: 12 }}>❤️</div>
@@ -82,13 +81,6 @@ const LoginPage: React.FC = () => {
           <p style={{ textAlign: 'center', marginTop: 18, color: '#3f2e31', opacity: 0.75 }}>
             Don&apos;t have an account? <Link to="/signup" className="helper-link">Sign Up</Link>
           </p>
-        </div>
-        <div className="mobile-ad-spacer"></div>
-      </div>
-
-      <div style={{ position: 'fixed', bottom: 16, left: 0, right: 0, display: 'flex', justifyContent: 'center', zIndex: 50, padding: '0 24px' }}>
-        <div style={{ width: '100%', maxWidth: 400 }}>
-          <AdBanner />
         </div>
       </div>
     </RomanticLayout>
