@@ -9,6 +9,8 @@ const AdminDashboard: React.FC = () => {
   const { user } = useGameStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [sort, setSort] = useState<'username_asc' | 'username_desc' | 'created_desc' | 'created_asc'>('username_asc');
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -22,8 +24,19 @@ const AdminDashboard: React.FC = () => {
         console.error('Failed to fetch stats', err);
       }
     };
+
+    const fetchUsers = async () => {
+      try {
+        const response = await api.get(`/admin/users?sort=${sort}`);
+        setUsers(response.data);
+      } catch (err) {
+        console.error('Failed to fetch users', err);
+      }
+    };
+
     fetchStats();
-  }, []);
+    fetchUsers();
+  }, [sort]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,6 +57,7 @@ const AdminDashboard: React.FC = () => {
     try {
       await api.post('/admin/users/credits', { userId, credits });
       setSearchResults(prev => prev.map(u => u.id === userId ? { ...u, credits } : u));
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, credits } : u));
       alert('Credits updated successfully');
     } catch (err) {
       console.error('Failed to update credits', err);
@@ -65,6 +79,8 @@ const AdminDashboard: React.FC = () => {
     );
   }
 
+  const visibleUsers = searchQuery.trim() ? searchResults : users;
+
   return (
     <RomanticLayout>
       <div className="page-center">
@@ -84,9 +100,37 @@ const AdminDashboard: React.FC = () => {
           </div>
 
           <div style={{ marginTop: 22 }}>
-            <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#4d2f35', marginBottom: 12 }}>User Management</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#4d2f35', marginBottom: 4 }}>User Management</div>
+                <div style={{ fontSize: '0.85rem', opacity: 0.7, color: '#5b3a40' }}>
+                  Browse all users or refine with search.
+                </div>
+              </div>
 
-            <form onSubmit={handleSearch} style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: '0.85rem', color: '#5b3a40' }}>Sort by</span>
+                <select
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value as any)}
+                  style={{
+                    background: 'rgba(255,255,255,0.8)',
+                    border: '1px solid #ffdae2',
+                    borderRadius: 16,
+                    padding: '6px 10px',
+                    fontSize: '0.85rem',
+                    color: '#2d2325',
+                  }}
+                >
+                  <option value="username_asc">Username A–Z</option>
+                  <option value="username_desc">Username Z–A</option>
+                  <option value="created_desc">Newest first</option>
+                  <option value="created_asc">Oldest first</option>
+                </select>
+              </div>
+            </div>
+
+            <form onSubmit={handleSearch} style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 14 }}>
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -110,18 +154,25 @@ const AdminDashboard: React.FC = () => {
           </div>
 
           <div style={{ marginTop: 14 }}>
-            {searchResults.length === 0 ? (
+            {visibleUsers.length === 0 ? (
               <div className="message" style={{ borderRadius: 18 }}>
-                <span>Search:</span> {searchQuery ? 'No users found matching your query.' : 'Search for users to manage their accounts.'}
+                <span>{searchQuery ? 'Search:' : 'Users:'}</span>{' '}
+                {searchQuery
+                  ? 'No users found matching your query.'
+                  : 'No users found in the system yet.'}
                 <div className="timestamp">admin</div>
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12 }}>
-                {searchResults.map((u) => (
+                {visibleUsers.map((u) => (
                   <div key={u.id} className="chat-box" style={{ width: '100%' }}>
                     <h3>{u.username}</h3>
                     <div className="message"><span>Email:</span> {u.email}<div className="timestamp">user</div></div>
-                    <div className="message"><span>Stats:</span> {u.stats?.gamesPlayed || 0} G • {u.stats?.wins || 0} W<div className="timestamp">user</div></div>
+                    <div className="message">
+                      <span>Stats:</span>{' '}
+                      {u.stats?.gamesPlayed || u.gamesPlayed || 0} G • {u.stats?.wins || u.wins || 0} W
+                      <div className="timestamp">user</div>
+                    </div>
 
                     <div className="chat-input">
                       <input id={`credits-${u.id}`} defaultValue={u.credits} type="number" min={0} max={999} />

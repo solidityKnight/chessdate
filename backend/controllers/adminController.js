@@ -20,6 +20,43 @@ exports.searchUsers = async (req, res) => {
   }
 };
 
+exports.listUsers = async (req, res) => {
+  try {
+    const { sort = 'username_asc' } = req.query;
+
+    let order;
+    switch (sort) {
+      case 'username_desc':
+        order = [['username', 'DESC']];
+        break;
+      case 'email_asc':
+        order = [['email', 'ASC']];
+        break;
+      case 'email_desc':
+        order = [['email', 'DESC']];
+        break;
+      case 'created_desc':
+        order = [['createdAt', 'DESC']];
+        break;
+      case 'created_asc':
+        order = [['createdAt', 'ASC']];
+        break;
+      default:
+        order = [['username', 'ASC']];
+    }
+
+    const users = await User.findAll({
+      attributes: { exclude: ['password'] },
+      order,
+    });
+
+    res.json(users);
+  } catch (error) {
+    console.error('Admin listUsers error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 exports.updateCredits = async (req, res) => {
   try {
     const { userId, credits } = req.body;
