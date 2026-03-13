@@ -52,4 +52,9 @@ api.interceptors.response.use(
   }
 );
 
+export const getAuthHeaders = () => {
+  const token = tokenStorage.get() || useGameStore.getState().token;
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 export default api;

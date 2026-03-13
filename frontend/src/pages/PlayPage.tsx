@@ -10,18 +10,22 @@ import RomanticChessboard from '../components/RomanticChessboard';
 import RomanticChatBox from '../components/RomanticChatBox';
 import AdBanner from '../components/AdBanner';
 import axios from 'axios';
+import LearningTip from '../components/LearningTip';
+import LearningPanel from '../components/LearningPanel';
+import api from '../services/apiService';
 
 const PlayPage: React.FC = () => {
   useSocket();
 
   const { selectGender, cancelMatchmaking, isInQueue } = useMatchmaking();
-  const { isConnected, error, currentGame } = useGameStore();
+  const { isConnected, error, currentGame, user: authUser, setUser } = useGameStore();
   const reset = useGameStore((s) => s.reset);
   const clearError = useGameStore((s) => s.setError);
   const token = useGameStore((s) => s.token);
   const navigate = useNavigate();
   const [analysis, setAnalysis] = React.useState<any>(null);
   const [analyzing, setAnalyzing] = React.useState(false);
+  const [isLearnPanelOpen, setIsLearnPanelOpen] = React.useState(false);
   const {
     resignGame,
     requestNewGame,
@@ -29,6 +33,9 @@ const PlayPage: React.FC = () => {
     acceptRematch,
     declineRematch,
     rematchStatus,
+    learningTips,
+    currentTip,
+    setCurrentTip,
   } = useChessGame();
 
   const handleAnalyze = async () => {
@@ -45,6 +52,17 @@ const PlayPage: React.FC = () => {
       alert('Failed to analyze game. Please try again.');
     } finally {
       setAnalyzing(false);
+    }
+  };
+
+  const toggleLearnMode = async () => {
+    if (!authUser) return;
+    const newMode = !authUser.learnMode;
+    try {
+      const response = await api.put('/user/profile', { learnMode: newMode });
+      setUser(response.data.user);
+    } catch (err) {
+      console.error('Failed to toggle learn mode', err);
     }
   };
 
@@ -113,14 +131,28 @@ const PlayPage: React.FC = () => {
           )}
 
           {!currentGame && (
-            <div className="buttons">
-              {isInQueue ? (
-                <RomanticButton variant="danger" onClick={cancelMatchmaking}>Cancel Matchmaking</RomanticButton>
-              ) : (
-                <>
-                  <RomanticButton variant="primary" onClick={() => selectGender('male')}>Play as Male</RomanticButton>
-                  <RomanticButton variant="secondary" onClick={() => selectGender('female')}>Play as Female</RomanticButton>
-                </>
+            <div className="flex flex-col gap-4">
+              <div className="buttons">
+                {isInQueue ? (
+                  <RomanticButton variant="danger" onClick={cancelMatchmaking}>Cancel Matchmaking</RomanticButton>
+                ) : (
+                  <>
+                    <RomanticButton variant="primary" onClick={() => selectGender('male')}>Play as Male</RomanticButton>
+                    <RomanticButton variant="secondary" onClick={() => selectGender('female')}>Play as Female</RomanticButton>
+                  </>
+                )}
+              </div>
+              
+              {!isInQueue && (
+                <div className="flex items-center gap-3 bg-white/50 backdrop-blur-sm p-3 rounded-2xl border border-pink-100 w-fit">
+                  <div 
+                    onClick={toggleLearnMode}
+                    className={`w-12 h-6 rounded-full transition-colors cursor-pointer relative ${authUser?.learnMode ? 'bg-pink-500' : 'bg-gray-300'}`}
+                  >
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${authUser?.learnMode ? 'left-7' : 'left-1'}`} />
+                  </div>
+                  <span className="text-sm font-bold text-gray-700 uppercase tracking-wider">Learn While Dating Mode: {authUser?.learnMode ? 'ON' : 'OFF'}</span>
+                </div>
               )}
             </div>
           )}
@@ -189,8 +221,23 @@ const PlayPage: React.FC = () => {
 
         <RomanticChessboard interactive={true} showHeartGlow={true} />
 
-        <RomanticChatBox title="Match chat" showInput={true} />
+        <div className="relative">
+          <RomanticChatBox title="Match chat" showInput={true} />
+          
+          {authUser?.learnMode && learningTips.length > 0 && (
+            <button 
+              onClick={() => setIsLearnPanelOpen(true)}
+              className="absolute -top-12 right-0 bg-white/80 backdrop-blur-sm border border-pink-100 px-4 py-2 rounded-xl text-xs font-bold text-pink-500 shadow-sm hover:bg-pink-50 transition-colors flex items-center gap-2"
+            >
+              🎓 Learn Log ({learningTips.length})
+            </button>
+          )}
+        </div>
       </section>
+
+      <LearningTip tip={currentTip} onClose={() => setCurrentTip(null)} />
+      <LearningPanel tips={learningTips} isOpen={isLearnPanelOpen} onClose={() => setIsLearnPanelOpen(false)} />
+
       <div className="page-center">
         {analysis && (
           <div className="card" style={{ width: 'min(800px, 95vw)', marginTop: 20, textAlign: 'left' }}>

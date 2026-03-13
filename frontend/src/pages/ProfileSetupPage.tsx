@@ -21,6 +21,7 @@ const ProfileSetupPage: React.FC = () => {
     latitude: null as number | null,
     longitude: null as number | null,
     preferredMatchDistance: 100,
+    learnMode: true,
     profilePhoto: ''
   });
 
@@ -174,6 +175,18 @@ const ProfileSetupPage: React.FC = () => {
                 value={formData.preferredMatchDistance} 
                 onChange={val => setFormData({...formData, preferredMatchDistance: val === 'Global' ? Infinity : Number(val)})}
               />
+              <div className="flex items-center gap-3 bg-pink-50 p-4 rounded-2xl border border-pink-100">
+                <div 
+                  onClick={() => setFormData({...formData, learnMode: !formData.learnMode})}
+                  className={`w-12 h-6 rounded-full transition-colors cursor-pointer relative ${formData.learnMode ? 'bg-pink-500' : 'bg-gray-300'}`}
+                >
+                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${formData.learnMode ? 'left-7' : 'left-1'}`} />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold text-gray-700 uppercase tracking-wider">Learn While Dating Mode</span>
+                  <span className="text-xs text-gray-500">Get helpful chess tips while you play!</span>
+                </div>
+              </div>
               <div className="flex gap-3">
                 <RomanticButton variant="secondary" onClick={() => setStep(1)}>Back</RomanticButton>
                 <RomanticButton fullWidth onClick={() => setStep(3)}>Next Step</RomanticButton>

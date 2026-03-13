@@ -26,7 +26,8 @@ const ProfilePage: React.FC = () => {
           city: user?.city || '',
           country: user?.country || '',
           interests: user?.interests || [],
-          profilePhoto: user?.profilePhoto || ''
+          profilePhoto: user?.profilePhoto || '',
+          learnMode: user?.learnMode ?? true
         });
       } catch (err) {
         console.error('Failed to fetch profile', err);
@@ -132,11 +133,24 @@ const ProfilePage: React.FC = () => {
                         onChange={(e) => setEditData({...editData, age: e.target.value})}
                       />
                     </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <input 
+                        type="checkbox"
+                        id="learnMode"
+                        className="w-4 h-4 text-pink-600 border-pink-300 rounded focus:ring-pink-500"
+                        checked={editData.learnMode}
+                        onChange={(e) => setEditData({...editData, learnMode: e.target.checked})}
+                      />
+                      <label htmlFor="learnMode" className="text-sm font-bold text-pink-600 uppercase">Learn While Dating Mode</label>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-3">
                     <p className="text-gray-700 italic">"{user.bio || 'No bio yet...'}"</p>
                     {user.age && <p className="text-sm text-gray-600"><b>Age:</b> {user.age}</p>}
+                    <p className="text-xs font-bold text-pink-500">
+                      Learn Mode: <span className={user.learnMode ? 'text-green-500' : 'text-gray-400'}>{user.learnMode ? 'ON' : 'OFF'}</span>
+                    </p>
                     <div className="flex flex-wrap gap-2 mt-2">
                       {user.interests?.map((interest: string) => (
                         <span key={interest} className="px-2 py-1 bg-white text-pink-600 text-xs font-bold rounded-full border border-pink-100">

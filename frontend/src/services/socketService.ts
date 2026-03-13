@@ -89,6 +89,10 @@ class SocketService {
     this.socket?.emit(event, data);
   }
 
+  getSocket(): Socket | null {
+    return this.socket;
+  }
+
   // ─── Internal event listeners ─────────────────────────────────────────────
 
   private setupEventListeners(): void {

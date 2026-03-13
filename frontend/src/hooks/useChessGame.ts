@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { socketService } from '../services/socketService';
 import { useGameStore } from '../store/gameStore';
+import { TipData } from '../components/LearningTip';
 
 /**
  * useChessGame
@@ -36,6 +37,19 @@ export const useChessGame = () => {
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
   const [possibleMoves,  setPossibleMoves]  = useState<string[]>([]);
   const [isLoadingMoves, setIsLoadingMoves] = useState(false);
+  const [learningTips, setLearningTips] = useState<TipData[]>([]);
+  const [currentTip, setCurrentTip] = useState<TipData | null>(null);
+
+  // ─── Learning Tip listeners ─────────────────────────────────────────────
+  useEffect(() => {
+    const handleLearningTip = (tip: TipData) => {
+      setLearningTips(prev => [...prev, tip]);
+      setCurrentTip(tip);
+    };
+
+    socketService.on('learning_tip', handleLearningTip);
+    return () => socketService.off('learning_tip', handleLearningTip);
+  }, []);
 
   // ─── Clear selection when the game changes ────────────────────────────────
   useEffect(() => {
@@ -213,5 +227,8 @@ export const useChessGame = () => {
     requestRematch,
     acceptRematch,
     declineRematch,
+    learningTips,
+    currentTip,
+    setCurrentTip,
   };
 };

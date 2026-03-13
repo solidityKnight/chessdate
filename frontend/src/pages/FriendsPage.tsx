@@ -12,7 +12,7 @@ const FriendsPage: React.FC = () => {
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
-  const socket = useSocket();
+  const { socket } = useSocket();
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -74,8 +74,10 @@ const FriendsPage: React.FC = () => {
   };
 
   const handleSelectFriend = (friend: any) => {
+    if (selectedFriend?.id === friend.id) return;
     setSelectedFriend(friend);
     setMessages([]);
+    setNewMessage('');
     if (socket) {
       socket.emit('join_friend_chat', { friendId: friend.id });
     }

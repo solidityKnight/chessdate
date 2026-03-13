@@ -71,11 +71,11 @@ const CareersPage: React.FC = () => {
         </div>
 
         {showApply && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto">
-            <div className="relative w-full max-w-2xl py-8">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm overflow-y-auto">
+            <div className="relative w-full max-w-2xl my-auto">
               <button 
                 onClick={() => setShowApply(false)}
-                className="absolute right-4 top-12 z-10 w-10 h-10 rounded-full bg-white shadow-lg border border-gray-100 flex items-center justify-center text-xl hover:scale-110 transition-transform"
+                className="absolute -top-4 -right-4 z-[110] w-10 h-10 rounded-full bg-white shadow-lg border border-gray-100 flex items-center justify-center text-xl hover:scale-110 transition-transform"
               >
                 ✕
               </button>
