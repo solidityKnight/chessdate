@@ -10,6 +10,8 @@ class SocketService {
   private maxReconnectAttempts = 5;
   private lastAuthToken: string | null = null;
 
+  private eventListeners: Map<string, Array<(data: any) => void>> = new Map();
+
   // ─── Connection ───────────────────────────────────────────────────────────
 
   connect(): Socket {
@@ -78,10 +80,22 @@ class SocketService {
   // ─── Public event subscription ────────────────────────────────────────────
 
   on<T = unknown>(event: string, handler: (data: T) => void): void {
+    if (!this.eventListeners.has(event)) {
+      this.eventListeners.set(event, []);
+    }
+    this.eventListeners.get(event)!.push(handler);
+
+    // If already connected, also attach to socket
     this.socket?.on(event, handler);
   }
 
   off<T = unknown>(event: string, handler: (data: T) => void): void {
+    const handlers = this.eventListeners.get(event);
+    if (handlers) {
+      this.eventListeners.set(event, handlers.filter(h => h !== handler));
+    }
+
+    // Also remove from socket
     this.socket?.off(event, handler);
   }
 
@@ -123,9 +137,9 @@ class SocketService {
     });
 
     // Matchmaking
-    this.socket.on('waiting_for_match', (data: { queuePosition: number }) => {
+    this.socket.on('waiting_for_match', (data: { queuePosition: { male: number; female: number; total: number } }) => {
       useGameStore.getState().setInQueue(true);
-      useGameStore.getState().setQueueStats(data.queuePosition as any);
+      useGameStore.getState().setQueueStats(data.queuePosition);
     });
 
     this.socket.on('game_start', (data: {
@@ -199,7 +213,28 @@ class SocketService {
       winner?: 'white' | 'black';
       result:  string;
     }) => {
-      useGameStore.getState().setGameStatus('finished', data.winner, data.result);
+      const state = useGameStore.getState();
+      state.setGameStatus('finished', data.winner, data.result);
+
+      // Update local user stats if available
+      const user = state.user;
+      const playerColor = state.currentGame?.playerColor;
+      
+      if (user && playerColor) {
+        const isWin = data.winner === playerColor;
+        const isDraw = !data.winner;
+        const isLoss = data.winner && data.winner !== playerColor;
+
+        useGameStore.getState().setUser({
+          ...user,
+          gamesPlayed: user.gamesPlayed + 1,
+          wins: isWin ? user.wins + 1 : user.wins,
+          losses: isLoss ? user.losses + 1 : user.losses,
+          draws: isDraw ? user.draws + 1 : user.draws,
+          winStreak: isWin ? user.winStreak + 1 : 0,
+          maxWinStreak: isWin ? Math.max(user.maxWinStreak, user.winStreak + 1) : user.maxWinStreak
+        });
+      }
     });
 
     this.socket.on('learning_tip', (data: any) => {
@@ -210,21 +245,9 @@ class SocketService {
     this.socket.on('elo_updated', (data: { newRating: number; change: number }) => {
       const user = useGameStore.getState().user;
       if (user) {
-        // change is usually something like +16 or -16
-        // If change is exactly 0, it was likely a draw
-        // If change is > 0, it was a win
-        // If change is < 0, it was a loss
-        const isWin = data.change > 0;
-        const isLoss = data.change < 0;
-        const isDraw = data.change === 0;
-
         useGameStore.getState().setUser({ 
           ...user, 
-          eloRating: data.newRating,
-          gamesPlayed: user.gamesPlayed + 1,
-          wins: isWin ? user.wins + 1 : user.wins,
-          losses: isLoss ? user.losses + 1 : user.losses,
-          draws: isDraw ? user.draws + 1 : user.draws
+          eloRating: data.newRating
         });
       }
     });
@@ -274,6 +297,11 @@ class SocketService {
 
     this.socket.on('invalid_move', (data: { error: string }) => {
       useGameStore.getState().setError(data.error);
+    });
+
+    // Re-attach persistent listeners (registered via .on())
+    this.eventListeners.forEach((handlers, event) => {
+      handlers.forEach(handler => this.socket?.on(event, handler));
     });
   }
 

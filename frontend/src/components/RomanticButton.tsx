@@ -3,7 +3,8 @@ import React from 'react';
 type RomanticButtonVariant = 'primary' | 'secondary' | 'domain' | 'danger';
 
 type RomanticButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant: RomanticButtonVariant;
+  variant?: RomanticButtonVariant;
+  fullWidth?: boolean;
 };
 
 const variantToClassName: Record<RomanticButtonVariant, string> = {
@@ -13,9 +14,15 @@ const variantToClassName: Record<RomanticButtonVariant, string> = {
   danger: 'danger-btn',
 };
 
-const RomanticButton: React.FC<RomanticButtonProps> = ({ variant, className, ...props }) => {
+const RomanticButton: React.FC<RomanticButtonProps> = ({ 
+  variant = 'primary', 
+  fullWidth = false,
+  className, 
+  ...props 
+}) => {
   const base = variantToClassName[variant];
-  const combined = className ? `${base} ${className}` : base;
+  const widthClass = fullWidth ? 'w-full' : '';
+  const combined = [base, widthClass, className].filter(Boolean).join(' ');
   return <button {...props} className={combined} />;
 };
 
