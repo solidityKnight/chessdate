@@ -20,15 +20,19 @@ const ProfilePage: React.FC = () => {
         const response = await api.get('/user/profile');
         setRecentGames(response.data.recentGames);
         setEditData({
-          displayName: user?.displayName || '',
-          age: user?.age || '',
-          bio: user?.bio || '',
-          city: user?.city || '',
-          country: user?.country || '',
-          interests: user?.interests || [],
-          profilePhoto: user?.profilePhoto || '',
-          learnMode: user?.learnMode ?? true
+          displayName: response.data.user?.displayName || '',
+          age: response.data.user?.age || '',
+          bio: response.data.user?.bio || '',
+          city: response.data.user?.city || '',
+          country: response.data.user?.country || '',
+          interests: response.data.user?.interests || [],
+          profilePhoto: response.data.user?.profilePhoto || '',
+          learnMode: response.data.user?.learnMode ?? true
         });
+        // Sync local user state if it differs
+        if (JSON.stringify(user) !== JSON.stringify(response.data.user)) {
+          setUser(response.data.user);
+        }
       } catch (err) {
         console.error('Failed to fetch profile', err);
       } finally {
@@ -36,7 +40,7 @@ const ProfilePage: React.FC = () => {
       }
     };
     fetchProfile();
-  }, [user]);
+  }, []); // Only fetch once on mount
 
   const handleLogout = () => {
     setUser(null);
@@ -84,7 +88,7 @@ const ProfilePage: React.FC = () => {
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">{user.displayName || user.username}</h1>
-                <div className="flex items-center gap-3 mt-2">
+                <div className="flex items-center gap-3 mt-2 flex-wrap">
                   <EloBadge rating={user.eloRating || 1200} className="text-sm" />
                   <span className="text-gray-500 text-sm">@{user.username}</span>
                   <span className="text-pink-500 font-medium text-sm capitalize">{user.gender}</span>
@@ -148,9 +152,12 @@ const ProfilePage: React.FC = () => {
                   <div className="space-y-3">
                     <p className="text-gray-700 italic">"{user.bio || 'No bio yet...'}"</p>
                     {user.age && <p className="text-sm text-gray-600"><b>Age:</b> {user.age}</p>}
-                    <p className="text-xs font-bold text-pink-500">
-                      Learn Mode: <span className={user.learnMode ? 'text-green-500' : 'text-gray-400'}>{user.learnMode ? 'ON' : 'OFF'}</span>
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-pink-500 uppercase">Learn Mode:</span>
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${user.learnMode ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'}`}>
+                        {user.learnMode ? 'ON' : 'OFF'}
+                      </span>
+                    </div>
                     <div className="flex flex-wrap gap-2 mt-2">
                       {user.interests?.map((interest: string) => (
                         <span key={interest} className="px-2 py-1 bg-white text-pink-600 text-xs font-bold rounded-full border border-pink-100">
@@ -165,6 +172,10 @@ const ProfilePage: React.FC = () => {
               <div className="bg-white rounded-2xl p-6 border border-pink-100 shadow-sm">
                 <h3 className="text-lg font-bold text-gray-800 mb-4">Chess Stats</h3>
                 <div className="space-y-3">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-500">Current Rating</span>
+                    <span className="font-bold text-gray-900">{user.eloRating || 1200}</span>
+                  </div>
                   <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-500">Games Played</span>
                     <span className="font-bold text-gray-900">{user.gamesPlayed || 0}</span>

@@ -52,14 +52,24 @@ export interface User {
   credits: number;
   gamesPlayedInCredit: number;
   lastCreditRegen: string;
-  stats: {
-    gamesPlayed: number;
-    wins: number;
-    losses: number;
-    draws: number;
-    winStreak: number;
-    maxWinStreak: number;
-  };
+  displayName?: string;
+  age?: number;
+  bio?: string;
+  interests?: string[];
+  profilePhoto?: string;
+  latitude?: number;
+  longitude?: number;
+  city?: string;
+  country?: string;
+  preferredMatchDistance?: number;
+  learnMode?: boolean;
+  eloRating: number;
+  gamesPlayed: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  winStreak: number;
+  maxWinStreak: number;
   achievements: Array<{
     name: string;
     description: string;

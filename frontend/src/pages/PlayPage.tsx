@@ -42,8 +42,7 @@ const PlayPage: React.FC = () => {
     if (!currentGame?.moves || currentGame.moves.length === 0) return;
     setAnalyzing(true);
     try {
-      // Use full paths or ensure axios is configured with base URL
-      const response = await axios.post('/api/game/analyze', { 
+      const response = await api.post('/game/analyze', { 
         moves: currentGame.moves.map((m: any) => m.san || m.lan || m) 
       });
       setAnalysis(response.data);

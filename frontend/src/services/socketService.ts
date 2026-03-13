@@ -202,10 +202,30 @@ class SocketService {
       useGameStore.getState().setGameStatus('finished', data.winner, data.result);
     });
 
+    this.socket.on('learning_tip', (data: any) => {
+      // Handled by individual components/hooks, but we can log it here if needed
+      console.log('💡 Learning tip received:', data);
+    });
+
     this.socket.on('elo_updated', (data: { newRating: number; change: number }) => {
       const user = useGameStore.getState().user;
       if (user) {
-        useGameStore.getState().setUser({ ...user, eloRating: data.newRating });
+        // change is usually something like +16 or -16
+        // If change is exactly 0, it was likely a draw
+        // If change is > 0, it was a win
+        // If change is < 0, it was a loss
+        const isWin = data.change > 0;
+        const isLoss = data.change < 0;
+        const isDraw = data.change === 0;
+
+        useGameStore.getState().setUser({ 
+          ...user, 
+          eloRating: data.newRating,
+          gamesPlayed: user.gamesPlayed + 1,
+          wins: isWin ? user.wins + 1 : user.wins,
+          losses: isLoss ? user.losses + 1 : user.losses,
+          draws: isDraw ? user.draws + 1 : user.draws
+        });
       }
     });
 
