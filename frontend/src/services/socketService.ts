@@ -377,7 +377,6 @@ class SocketService {
 
   // ─── Utilities ────────────────────────────────────────────────────────────
 
-  getSocket(): Socket | null { return this.socket; }
   isConnected(): boolean     { return this.socket?.connected ?? false; }
 }
 
