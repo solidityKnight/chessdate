@@ -154,6 +154,8 @@ app.use(express.json());
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/user', require('./routes/userRoutes'));
+app.use('/api/game', require('./routes/gameRoutes'));
+app.use('/api/contact', require('./routes/contactRoutes'));
 app.use('/api/leaderboard', require('./routes/leaderboardRoutes'));
 app.use('/api/users/search', require('./routes/searchRoutes'));
 app.use('/api/follow', require('./routes/followRoutes'));
