@@ -1,9 +1,64 @@
 const { Chess } = require('chess.js');
-const stockfish = require('stockfish.js');
+const path = require('path');
+const fs = require('fs');
 
 class AnalysisService {
   constructor() {
     this.engine = null;
+    this._stockfishFactory = null;
+  }
+
+  /**
+   * Lazy load Stockfish to prevent server crash on startup
+   */
+  async _getEngine() {
+    if (!this._stockfishFactory) {
+      try {
+        // We use the 'stockfish' package's bin file directly for Node.js
+        const factoryPath = path.join(__dirname, '..', 'node_modules', 'stockfish', 'bin', 'stockfish-18.js');
+        if (!fs.existsSync(factoryPath)) {
+          throw new Error(`Stockfish engine not found at ${factoryPath}`);
+        }
+        
+        // Railway Fix: Prevent Stockfish.js from crashing in Node 18+
+        // It tries to fetch('stockfish.wasm') which fails with ERR_INVALID_URL in Node.
+        if (typeof fetch === 'function' && !global.XMLHttpRequest) {
+          const oldFetch = global.fetch;
+          global.fetch = async (url, options) => {
+            if (typeof url === 'string' && url.includes('stockfish')) {
+              const wasmPath = path.join(__dirname, '..', 'node_modules', 'stockfish', 'bin', 'stockfish-18.wasm');
+              if (fs.existsSync(wasmPath)) {
+                const buffer = fs.readFileSync(wasmPath);
+                return {
+                  ok: true,
+                  status: 200,
+                  arrayBuffer: async () => buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+                  blob: async () => new Blob([buffer])
+                };
+              }
+            }
+            return oldFetch(url, options);
+          };
+        }
+
+        this._stockfishFactory = require(factoryPath);
+      } catch (err) {
+        console.error('❌ Failed to load Stockfish factory:', err);
+        throw err;
+      }
+    }
+    
+    // In stockfish v18, the factory returns a promise that resolves to the module
+    const engine = await this._stockfishFactory();
+    
+    // Polyfill postMessage/onmessage if they don't exist
+    if (typeof engine.postMessage !== 'function') {
+      // In Node.js environment, the Emscripten module might be used directly
+      // but usually the bin/stockfish-18.js wrapper handles it.
+      // If not, we can provide a basic bridge to the UCI interface.
+    }
+    
+    return engine;
   }
 
   /**
@@ -12,8 +67,8 @@ class AnalysisService {
    * @returns {Promise<Object>} Analysis results
    */
   async analyzeGame(moves) {
-    return new Promise((resolve, reject) => {
-      const engine = stockfish();
+    try {
+      const engine = await this._getEngine();
       const chess = new Chess();
       const analysis = {
         accuracy: 0,
@@ -29,75 +84,74 @@ class AnalysisService {
         }
       };
 
-      let currentMoveIndex = 0;
       const totalMoves = moves.length;
       let totalEvalDiff = 0;
 
-      const runAnalysis = () => {
-        if (currentMoveIndex >= totalMoves) {
-          // Calculate final accuracy (simplified)
-          const avgLoss = totalMoves > 0 ? totalEvalDiff / totalMoves : 0;
-          analysis.accuracy = Math.max(0, Math.min(100, Math.round(100 * Math.exp(-0.004 * avgLoss))));
-          engine.terminate();
-          resolve(analysis);
-          return;
-        }
-
-        const move = moves[currentMoveIndex];
+      for (let i = 0; i < totalMoves; i++) {
+        const move = moves[i];
         const fenBefore = chess.fen();
         
         try {
           chess.move(move);
         } catch (e) {
           console.error(`Invalid move in analysis: ${move}`);
-          engine.terminate();
-          reject(new Error(`Invalid move: ${move}`));
-          return;
+          break;
         }
 
-        const fenAfter = chess.fen();
+        const score = await this._getEvaluation(engine, fenBefore);
+        const bestMove = await this._getBestMove(engine, fenBefore);
 
-        // Get evaluation for the position
-        engine.postMessage('uci');
-        engine.postMessage(`position fen ${fenBefore}`);
-        engine.postMessage('go depth 12'); // Fast analysis depth
-
-        let bestMove = '';
-        let score = 0;
-
-        const onMessage = (line) => {
-          if (line.startsWith('info depth') && line.includes('score cp')) {
-            const parts = line.split(' ');
-            const scoreIdx = parts.indexOf('cp');
-            if (scoreIdx !== -1) {
-              score = parseInt(parts[scoreIdx + 1]);
-            }
-          } else if (line.startsWith('bestmove')) {
-            bestMove = line.split(' ')[1];
-            
-            // Simplified classification logic
-            // In a real app, we'd compare the move played with the engine's top choices
-            // For now, let's categorize based on a simple heuristic or mark as "Analyzed"
-            const moveAnalysis = {
-              move,
-              bestMove,
-              type: this._classifyMove(score), // Placeholder classification
-              comment: this._getComment(score)
-            };
-
-            analysis.moves.push(moveAnalysis);
-            this._updateSummary(analysis.summary, moveAnalysis.type);
-            
-            currentMoveIndex++;
-            engine.removeAllListeners('message');
-            runAnalysis();
-          }
+        const moveAnalysis = {
+          move,
+          bestMove,
+          type: this._classifyMove(score),
+          comment: this._getComment(score)
         };
 
-        engine.onmessage = onMessage;
-      };
+        analysis.moves.push(moveAnalysis);
+        this._updateSummary(analysis.summary, moveAnalysis.type);
+      }
 
-      runAnalysis();
+      const avgLoss = totalMoves > 0 ? totalEvalDiff / totalMoves : 0;
+      analysis.accuracy = Math.max(0, Math.min(100, Math.round(100 * Math.exp(-0.004 * avgLoss))));
+      
+      return analysis;
+    } catch (error) {
+      console.error('Analysis error:', error);
+      throw error;
+    }
+  }
+
+  async _getEvaluation(engine, fen) {
+    return new Promise((resolve) => {
+      let score = 0;
+      const onMessage = (line) => {
+        if (line.startsWith('info depth') && line.includes('score cp')) {
+          const parts = line.split(' ');
+          const scoreIdx = parts.indexOf('cp');
+          if (scoreIdx !== -1) score = parseInt(parts[scoreIdx + 1]);
+        } else if (line.startsWith('bestmove')) {
+          engine.removeMessageListener(onMessage);
+          resolve(score);
+        }
+      };
+      engine.addMessageListener(onMessage);
+      engine.postMessage(`position fen ${fen}`);
+      engine.postMessage('go depth 10');
+    });
+  }
+
+  async _getBestMove(engine, fen) {
+    return new Promise((resolve) => {
+      const onMessage = (line) => {
+        if (line.startsWith('bestmove')) {
+          engine.removeMessageListener(onMessage);
+          resolve(line.split(' ')[1]);
+        }
+      };
+      engine.addMessageListener(onMessage);
+      engine.postMessage(`position fen ${fen}`);
+      engine.postMessage('go depth 10');
     });
   }
 
