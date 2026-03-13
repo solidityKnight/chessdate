@@ -4,6 +4,8 @@ const gameManager  = require('../services/gameManager');
 const chessService = require('../services/chessService');
 const aiService    = require('../services/aiService');
 const botService   = require('../services/BotService');
+const chessLearningService = require('../services/chessLearningService');
+const { User } = require('../models');
 
 /**
  * Attach all chess-game socket event handlers to a single socket.
@@ -97,6 +99,28 @@ function gameSocket(socket, io) {
       // Apply move — throws on illegal move or invalid game state.
       const result = await gameManager.makeMove(gameId, from, to, promotion, io);
       const { move, gameState } = result;
+
+      // Learn While Dating Mode integration
+      try {
+        const user = await User.findByPk(socket.user.id);
+        if (user && user.learnMode) {
+          const fenBefore = guard.gameState.board;
+          const fenAfter = gameState.board;
+          const tip = chessLearningService.detectTactic(fenBefore, move, fenAfter);
+          
+          if (tip) {
+            // Increase frequency for beginners (Elo < 1000)
+            const isBeginner = (user.eloRating || 1200) < 1000;
+            const probability = isBeginner ? 0.9 : 0.5;
+            
+            if (Math.random() < probability) {
+              socket.emit('learning_tip', tip);
+            }
+          }
+        }
+      } catch (err) {
+        console.error('Error in Learn Mode detection:', err);
+      }
 
       // Derive status once from the authoritative post-move state.
       const gameStatus = chessService.getGameStatus(gameState.board);

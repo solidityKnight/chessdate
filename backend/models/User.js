@@ -90,6 +90,10 @@ const User = sequelize.define('User', {
     type: DataTypes.INTEGER,
     defaultValue: 100 // Default 100km
   },
+  learnMode: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true
+  },
   // Stats
   eloRating: {
     type: DataTypes.INTEGER,

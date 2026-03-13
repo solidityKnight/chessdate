@@ -15,6 +15,8 @@ const chessService      = require('./chessService');
 const messageGenerator  = require('./BotMessageGenerator');
 const aiService         = require('./aiService');
 const settingsService   = require('./SettingsService');
+const chessLearningService = require('./chessLearningService');
+const { User } = require('../models');
 
 // ─── Bot difficulty weights ────────────────────────────────────────────────
 // Total = 100%.  Adjusted per user spec (Easy 10, Medium 30, Hard 50, Super Hard 5, Extreme Hard 5).
@@ -281,6 +283,33 @@ class BotService {
     // Classify the player's move
     const moveQuality = chessBotEngine.classifyPlayerMove(fenBefore, fenAfter);
 
+    // Learn While Dating Mode integration
+    try {
+      const socket = io.sockets.sockets.get(botGame.humanSocketId);
+      if (socket && socket.user) {
+        const user = await User.findByPk(socket.user.id);
+        if (user && user.learnMode) {
+          // We need the full move object for tactic detection
+          const { Chess } = require('chess.js');
+          const chess = new Chess(fenBefore);
+          const move = chess.move(lastMoveSan);
+          
+          if (move) {
+            const tip = chessLearningService.detectTactic(fenBefore, move, fenAfter);
+            if (tip) {
+              const isBeginner = (user.eloRating || 1200) < 1000;
+              const probability = isBeginner ? 0.9 : 0.5;
+              if (Math.random() < probability) {
+                socket.emit('learning_tip', tip);
+              }
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error in Bot Learn Mode detection:', err);
+    }
+
     // Trigger chat reaction
     messageGenerator.onMoveMade(gameId, io, {
       fen: fenAfter,
@@ -290,6 +319,38 @@ class BotService {
 
     // Schedule the bot's reply move with human-like delay
     this._scheduleBotMove(gameId, io, moveQuality);
+  }
+
+  /**
+   * Called after the bot makes a move.
+   * Emits learning tips for bot's tactical moves.
+   */
+  async _handleBotLearnTips(gameId, io, fenBefore, fenAfter, move) {
+    const botGame = this.botGames.get(gameId);
+    if (!botGame) return;
+
+    try {
+      const socket = io.sockets.sockets.get(botGame.humanSocketId);
+      if (socket && socket.user) {
+        const user = await User.findByPk(socket.user.id);
+        if (user && user.learnMode) {
+          const tip = chessLearningService.detectTactic(fenBefore, move, fenAfter);
+          if (tip) {
+            const isBeginner = (user.eloRating || 1200) < 1000;
+            const probability = isBeginner ? 0.7 : 0.3; // Slightly lower for bot moves
+            if (Math.random() < probability) {
+              socket.emit('learning_tip', {
+                ...tip,
+                message: `Watch out! ${tip.message.replace('!', '')}`,
+                explanation: `The bot ${tip.explanation.charAt(0).toLowerCase() + tip.explanation.slice(1)}`
+              });
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error in Bot Move Learn Mode detection:', err);
+    }
   }
 
   /**
@@ -382,6 +443,9 @@ class BotService {
 
     const { move, gameState: updatedState } = result;
     const gameStatus = chessService.getGameStatus(updatedState.board);
+
+    // Handle learning tips for bot moves
+    await this._handleBotLearnTips(gameId, io, fenBefore, updatedState.board, move);
 
     // Emit move_made to the human player (same flow as a real player)
     io.to(gameId).emit('move_made', {

@@ -40,7 +40,7 @@ exports.updateProfile = async (req, res) => {
   try {
     const { 
       displayName, age, bio, interests, profilePhoto,
-      latitude, longitude, city, country, preferredMatchDistance 
+      latitude, longitude, city, country, preferredMatchDistance, learnMode 
     } = req.body;
 
     const user = await User.findByPk(req.user.id);
@@ -59,6 +59,7 @@ exports.updateProfile = async (req, res) => {
     if (city !== undefined) user.city = city;
     if (country !== undefined) user.country = country;
     if (preferredMatchDistance !== undefined) user.preferredMatchDistance = preferredMatchDistance;
+    if (learnMode !== undefined) user.learnMode = learnMode;
 
     await user.save();
 
