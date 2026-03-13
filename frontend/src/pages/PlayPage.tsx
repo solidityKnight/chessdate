@@ -9,6 +9,7 @@ import RomanticButton from '../components/RomanticButton';
 import RomanticChessboard from '../components/RomanticChessboard';
 import RomanticChatBox from '../components/RomanticChatBox';
 import AdBanner from '../components/AdBanner';
+import axios from 'axios';
 
 const PlayPage: React.FC = () => {
   useSocket();
@@ -19,6 +20,8 @@ const PlayPage: React.FC = () => {
   const clearError = useGameStore((s) => s.setError);
   const token = useGameStore((s) => s.token);
   const navigate = useNavigate();
+  const [analysis, setAnalysis] = React.useState<any>(null);
+  const [analyzing, setAnalyzing] = React.useState(false);
   const {
     resignGame,
     requestNewGame,
@@ -27,6 +30,23 @@ const PlayPage: React.FC = () => {
     declineRematch,
     rematchStatus,
   } = useChessGame();
+
+  const handleAnalyze = async () => {
+    if (!currentGame?.moves || currentGame.moves.length === 0) return;
+    setAnalyzing(true);
+    try {
+      // Use full paths or ensure axios is configured with base URL
+      const response = await axios.post('/api/game/analyze', { 
+        moves: currentGame.moves.map((m: any) => m.san || m.lan || m) 
+      });
+      setAnalysis(response.data);
+    } catch (err) {
+      console.error('Analysis failed', err);
+      alert('Failed to analyze game. Please try again.');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   useEffect(() => {
     document.title = 'ChessDate · where hearts meet checkmates';
@@ -118,9 +138,17 @@ const PlayPage: React.FC = () => {
                         requestNewGame();
                         reset();
                         clearError(null);
+                        setAnalysis(null);
                       }}
                     >
                       Play Again
+                    </RomanticButton>
+                    <RomanticButton 
+                      variant="primary" 
+                      onClick={handleAnalyze} 
+                      disabled={analyzing}
+                    >
+                      {analyzing ? 'Analyzing...' : 'Analyze Game'}
                     </RomanticButton>
                   </>
                 ) : (
@@ -138,9 +166,17 @@ const PlayPage: React.FC = () => {
                         requestNewGame();
                         reset();
                         clearError(null);
+                        setAnalysis(null);
                       }}
                     >
                       Play Again
+                    </RomanticButton>
+                    <RomanticButton 
+                      variant="primary" 
+                      onClick={handleAnalyze} 
+                      disabled={analyzing}
+                    >
+                      {analyzing ? 'Analyzing...' : 'Analyze Game'}
                     </RomanticButton>
                   </>
                 )
@@ -156,6 +192,58 @@ const PlayPage: React.FC = () => {
         <RomanticChatBox title="Match chat" showInput={true} />
       </section>
       <div className="page-center">
+        {analysis && (
+          <div className="card" style={{ width: 'min(800px, 95vw)', marginTop: 20, textAlign: 'left' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <h2 style={{ margin: 0 }}>Game Analysis ♟️</h2>
+              <div style={{ 
+                background: 'linear-gradient(135deg, #ff6b95, #ff4d7d)', 
+                color: 'white', 
+                padding: '8px 16px', 
+                borderRadius: '12px',
+                fontWeight: 'bold',
+                fontSize: '1.1rem'
+              }}>
+                Accuracy: {analysis.accuracy}%
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10, marginBottom: 20 }}>
+              {Object.entries(analysis.summary).map(([key, val]: [string, any]) => (
+                <div key={key} style={{ background: '#f8f9fa', padding: 10, borderRadius: 10, textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.8rem', opacity: 0.6, textTransform: 'capitalize' }}>{key}</div>
+                  <div style={{ fontWeight: 'bold' }}>{val}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ maxHeight: 300, overflowY: 'auto', padding: 10, background: '#fdfdfd', borderRadius: 15, border: '1px solid #eee' }}>
+              {analysis.moves.map((m: any, i: number) => (
+                <div key={i} style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  padding: '10px 0', 
+                  borderBottom: i === analysis.moves.length - 1 ? 'none' : '1px solid #f0f0f0' 
+                }}>
+                  <div>
+                    <span style={{ opacity: 0.4, marginRight: 10 }}>{Math.floor(i/2) + 1}.{i%2===0?'':'..'}</span>
+                    <b style={{ color: m.type === 'Blunder' ? '#e53e3e' : m.type === 'Mistake' ? '#dd6b20' : m.type === 'Best Move' ? '#38a169' : 'inherit' }}>
+                      {m.move}
+                    </b>
+                    <span style={{ marginLeft: 10, fontSize: '0.85rem', color: '#718096' }}>— {m.type}</span>
+                  </div>
+                  <div style={{ fontSize: '0.85rem', fontStyle: 'italic', color: '#4a5568' }}>
+                    {m.comment} {m.bestMove && m.type !== 'Best Move' ? `(Best: ${m.bestMove})` : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+            
+            <div style={{ textAlign: 'center', marginTop: 20 }}>
+              <RomanticButton variant="secondary" onClick={() => setAnalysis(null)}>Close Analysis</RomanticButton>
+            </div>
+          </div>
+        )}
         <AdBanner />
       </div>
     </RomanticLayout>
