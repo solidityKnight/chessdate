@@ -35,11 +35,7 @@ exports.register = async (req, res) => {
     });
 
     res.status(201).json({
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      gender: user.gender,
-      credits: user.credits,
+      ...user.toJSON(),
       token: generateToken(user.id)
     });
   } catch (error) {
@@ -56,12 +52,7 @@ exports.login = async (req, res) => {
 
     if (user && (await user.comparePassword(password))) {
       res.json({
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        gender: user.gender,
-        role: user.role,
-        credits: user.credits,
+        ...user.toJSON(),
         token: generateToken(user.id)
       });
     } else {
