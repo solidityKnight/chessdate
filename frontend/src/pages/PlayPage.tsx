@@ -9,7 +9,6 @@ import RomanticButton from '../components/RomanticButton';
 import RomanticChessboard from '../components/RomanticChessboard';
 import RomanticChatBox from '../components/RomanticChatBox';
 import AdBanner from '../components/AdBanner';
-import axios from 'axios';
 import LearningTip from '../components/LearningTip';
 import LearningPanel from '../components/LearningPanel';
 import api from '../services/apiService';

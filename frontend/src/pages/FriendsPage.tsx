@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import api from '../services/apiService';
 import { useSocket } from '../hooks/useSocket';
 import RomanticLayout from '../components/RomanticLayout';
-import RomanticButton from '../components/RomanticButton';
-import PlayerCard from '../components/PlayerCard';
 
 const FriendsPage: React.FC = () => {
   const [friends, setFriends] = useState<any[]>([]);
@@ -11,7 +9,6 @@ const FriendsPage: React.FC = () => {
   const [selectedFriend, setSelectedFriend] = useState<any | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(true);
   const { socket } = useSocket();
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -59,8 +56,6 @@ const FriendsPage: React.FC = () => {
       setPending(pendingRes.data);
     } catch (err) {
       console.error('Failed to fetch follows', err);
-    } finally {
-      setLoading(false);
     }
   };
 

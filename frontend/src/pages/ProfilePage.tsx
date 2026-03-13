@@ -40,7 +40,7 @@ const ProfilePage: React.FC = () => {
       }
     };
     fetchProfile();
-  }, []); // Only fetch once on mount
+  }, [user, setUser]); // Sync profile on mount or if user object changes
 
   const handleLogout = () => {
     setUser(null);

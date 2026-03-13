@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import api from '../services/apiService';
 import RomanticLayout from '../components/RomanticLayout';
 import PlayerCard from '../components/PlayerCard';
@@ -7,6 +7,18 @@ const FindPlayerPage: React.FC = () => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+
+  const handleSearch = useCallback(async () => {
+    setLoading(true);
+    try {
+      const response = await api.get(`/users/search?q=${query}`);
+      setResults(response.data);
+    } catch (err) {
+      console.error('Search failed', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [query]);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -18,19 +30,7 @@ const FindPlayerPage: React.FC = () => {
     }, 500);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [query]);
-
-  const handleSearch = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get(`/users/search?q=${query}`);
-      setResults(response.data);
-    } catch (err) {
-      console.error('Search failed', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [query, handleSearch]);
 
   return (
     <RomanticLayout>
