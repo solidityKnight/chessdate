@@ -5,6 +5,7 @@ const { redisClient } = require('../redis/redisClient');
 const { User, Game } = require('../models');
 const creditSystem = require('../utils/creditSystem');
 const achievementSystem = require('../utils/achievementSystem');
+const eloService = require('./eloService');
 
 /** @typedef {{ white: string, black: string }} Players */
 /** @typedef {'active'|'finished'} GameStatus */
@@ -113,6 +114,10 @@ class GameManager {
   async _updateUserStats(gameState, io) {
     try {
       const { white: whiteId, black: blackId } = gameState.userIds;
+      
+      // Don't update stats if it's a bot match (one or both userIds missing)
+      if (!whiteId || !blackId) return;
+
       const whiteUser = await User.findByPk(whiteId);
       const blackUser = await User.findByPk(blackId);
 
@@ -121,6 +126,21 @@ class GameManager {
       // Update basic stats
       whiteUser.gamesPlayed += 1;
       blackUser.gamesPlayed += 1;
+
+      // Calculate Elo changes
+      let result;
+      if (gameState.winner === 'white') result = 'win';
+      else if (gameState.winner === 'black') result = 'loss';
+      else result = 'draw';
+
+      const eloChanges = eloService.processGameResult(
+        whiteUser.eloRating,
+        blackUser.eloRating,
+        result
+      );
+
+      whiteUser.eloRating = eloChanges.newRating1;
+      blackUser.eloRating = eloChanges.newRating2;
 
       if (gameState.winner === 'white') {
         whiteUser.wins += 1;
@@ -145,6 +165,16 @@ class GameManager {
 
       await whiteUser.save();
       await blackUser.save();
+
+      // Emit Elo update to both players
+      io.to(gameState.players.white).emit('elo_updated', { 
+        newRating: whiteUser.eloRating, 
+        change: eloChanges.change1 
+      });
+      io.to(gameState.players.black).emit('elo_updated', { 
+        newRating: blackUser.eloRating, 
+        change: eloChanges.change2 
+      });
 
       // Check achievements
       if (gameState.winner === 'white') {

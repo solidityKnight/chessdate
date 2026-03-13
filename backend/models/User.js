@@ -48,11 +48,57 @@ const User = sequelize.define('User', {
     type: DataTypes.DATE,
     defaultValue: DataTypes.NOW
   },
+  // Profile Info
+  displayName: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  age: {
+    type: DataTypes.INTEGER,
+    allowNull: true
+  },
+  bio: {
+    type: DataTypes.TEXT,
+    allowNull: true
+  },
+  interests: {
+    type: DataTypes.JSONB,
+    defaultValue: []
+  },
+  profilePhoto: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  // Location
+  latitude: {
+    type: DataTypes.FLOAT,
+    allowNull: true
+  },
+  longitude: {
+    type: DataTypes.FLOAT,
+    allowNull: true
+  },
+  city: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  country: {
+    type: DataTypes.STRING,
+    allowNull: true
+  },
+  preferredMatchDistance: {
+    type: DataTypes.INTEGER,
+    defaultValue: 100 // Default 100km
+  },
   // Stats
+  eloRating: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1200
+  },
   gamesPlayed: { type: DataTypes.INTEGER, defaultValue: 0 },
   wins: { type: DataTypes.INTEGER, defaultValue: 0 },
-    losses: { type: DataTypes.INTEGER, defaultValue: 0 },
-    draws: { type: DataTypes.INTEGER, defaultValue: 0 },
+  losses: { type: DataTypes.INTEGER, defaultValue: 0 },
+  draws: { type: DataTypes.INTEGER, defaultValue: 0 },
     totalMessages: { type: DataTypes.INTEGER, defaultValue: 0 },
     winStreak: { type: DataTypes.INTEGER, defaultValue: 0 },
   maxWinStreak: { type: DataTypes.INTEGER, defaultValue: 0 },

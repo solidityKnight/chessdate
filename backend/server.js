@@ -12,6 +12,7 @@ const helmet   = require('helmet');
 const matchmakingSocket = require('./sockets/matchmaking');
 const gameSocket        = require('./sockets/gameSocket');
 const chatSocket        = require('./sockets/chatSocket');
+const friendChatSocket  = require('./sockets/friendChatSocket');
 
 // Import services
 const matchmakingService          = require('./services/matchmakingService');
@@ -153,6 +154,9 @@ app.use(express.json());
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/user', require('./routes/userRoutes'));
+app.use('/api/leaderboard', require('./routes/leaderboardRoutes'));
+app.use('/api/users/search', require('./routes/searchRoutes'));
+app.use('/api/follow', require('./routes/followRoutes'));
 
 // ─── Health / debug endpoints ─────────────────────────────────────────────────
 
@@ -260,6 +264,7 @@ io.on('connection', (socket) => {
   matchmakingSocket(socket, io);
   gameSocket(socket, io);
   chatSocket(socket, io);
+  friendChatSocket(socket, io);
 
   socket.on('disconnect', async (reason) => {
     console.log(`🔌 Disconnected: ${socket.id}, reason: ${reason}`);

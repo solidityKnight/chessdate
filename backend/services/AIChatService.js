@@ -51,34 +51,7 @@ function getRandomName(gender) {
   return list[Math.floor(Math.random() * list.length)];
 }
 
-// ─── Fallback responses when no API is available ────────────────────────────
-
-const FALLBACK_RESPONSES = {
-  winning: [
-    'gg', 'lol', 'nice try', 'this is over 😏', 'mate soon',
-    'too easy', 'oof', 'rip', '💀', 'ez', 'haha', 'sry 😅',
-  ],
-  losing: [
-    'ugh', 'wait what', 'bruh', 'ok nice', 'damn', 'how',
-    'lucky move', '😤', 'fine', 'ughhh', 'ok that was good', 'nah',
-  ],
-  equal: [
-    'hmm', 'interesting', 'ok', 'lets see', 'ur turn',
-    'nice', '🤔', 'alright', 'go on', 'hmm ok', 'not bad',
-  ],
-  greeting: [
-    'hey', 'hii', 'heyy', 'hihi', 'hi there', 'yo', 'heyyy',
-    'hello!', 'sup', 'hiii',
-  ],
-  instagram: [
-    'you got insta?', "what's your insta?", 'drop ur insta',
-    'u on insta?', 'insta?',
-  ],
-  instagram_reply: [
-    'maybe if you win 😏', 'beat me first', 'win and find out 😉',
-    'lol maybe after the game', 'u gotta earn it 😏',
-  ],
-};
+// ─── Fallback (no API) ───────────────────────────────────────────────────
 
 class AIChatService {
 
@@ -216,39 +189,9 @@ Reply as ${name}:`;
   // ─── Fallback (no API) ───────────────────────────────────────────────────
 
   _fallbackResponse(prompt) {
-    // Try to detect context from prompt keywords
-    const lower = prompt.toLowerCase();
-
-    let pool;
-    if (lower.includes('winning')) {
-      pool = FALLBACK_RESPONSES.winning;
-    } else if (lower.includes('losing')) {
-      pool = FALLBACK_RESPONSES.losing;
-    } else if (lower.includes('greeting') || lower.includes('hello') || lower.includes('game just started')) {
-      pool = FALLBACK_RESPONSES.greeting;
-    } else if (lower.includes('instagram') || lower.includes('insta')) {
-      pool = FALLBACK_RESPONSES.instagram_reply;
-    } else {
-      pool = FALLBACK_RESPONSES.equal;
-    }
-
-    return pool[Math.floor(Math.random() * pool.length)];
-  }
-
-  /**
-   * Get a random Instagram-related message (bot initiating).
-   */
-  getInstagramAsk() {
-    const pool = FALLBACK_RESPONSES.instagram;
-    return pool[Math.floor(Math.random() * pool.length)];
-  }
-
-  /**
-   * Get a random Instagram reply (when player asks for bot's insta).
-   */
-  getInstagramReply() {
-    const pool = FALLBACK_RESPONSES.instagram_reply;
-    return pool[Math.floor(Math.random() * pool.length)];
+    // If AI is not available, return a very minimal, neutral response
+    // instead of canned pool messages, as the user prefers direct AI.
+    return '...';
   }
 
   /**

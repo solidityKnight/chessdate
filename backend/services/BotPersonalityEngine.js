@@ -117,6 +117,7 @@ class BotPersonalityEngine {
     moveCount,
     context,
     isFollowUp = false,
+    chatHistory = [],
   }) {
     const genderLabel = botGender === 'female' ? 'female' : 'male';
     const opponentGender = botGender === 'female' ? 'male' : 'female';
@@ -125,6 +126,15 @@ class BotPersonalityEngine {
 Your name is ${botName || 'Aarav'}. You are ${genderLabel}.
 Your personality is ${personality.name.toUpperCase()}: ${personality.traits}.\n`;
     prompt += `You are currently ${gameStatus.toUpperCase()} the game.\n`;
+
+    if (chatHistory && chatHistory.length > 0) {
+      prompt += '\nRecent Chat History:\n';
+      chatHistory.forEach(entry => {
+        const sender = entry.role === 'user' ? 'Opponent' : botName || 'Aarav';
+        prompt += `${sender}: ${entry.message}\n`;
+      });
+      prompt += '\n';
+    }
 
     if (lastMoveSan) {
       prompt += `Last move played: ${lastMoveSan}.\n`;

@@ -45,6 +45,7 @@ class BotMessageGenerator {
       moveCount: 0,
       instagramAsked: false,
       pendingTimers: new Set(),
+      chatHistory: [], // Store chat history for context
     };
 
     this.sessions.set(gameId, session);
@@ -88,6 +89,10 @@ class BotMessageGenerator {
   async onPlayerMessage(gameId, io, playerMessage) {
     const session = this.sessions.get(gameId);
     if (!session) return;
+
+    // Add to history
+    session.chatHistory.push({ role: 'user', message: playerMessage });
+    if (session.chatHistory.length > 10) session.chatHistory.shift();
 
     // 30% chance to ignore (lowered from 40% for better engagement)
     if (Math.random() < 0.30) {
@@ -211,6 +216,7 @@ class BotMessageGenerator {
       moveCount: session.moveCount,
       context,
       isFollowUp: extra.isFollowUp || false,
+      chatHistory: session.chatHistory,
     });
 
     // Get AI response (or fallback)
@@ -218,6 +224,10 @@ class BotMessageGenerator {
       botName: session.botName,
       botGender: session.botGender,
     });
+
+    // Add bot's response to history
+    session.chatHistory.push({ role: 'bot', message });
+    if (session.chatHistory.length > 10) session.chatHistory.shift();
 
     // Apply human imperfections
     message = personalityEngine.addHumanImperfections(message);

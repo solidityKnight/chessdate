@@ -32,7 +32,7 @@ const SignUpPage: React.FC = () => {
       const { token, ...userData } = response.data;
       setToken(token);
       setUser(userData);
-      navigate('/');
+      navigate('/profile-setup');
     } catch (err: any) {
       const data = err?.response?.data;
       const firstValidation = Array.isArray(data?.errors) ? data.errors[0]?.msg : null;

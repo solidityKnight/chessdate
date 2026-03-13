@@ -198,6 +198,13 @@ class SocketService {
       useGameStore.getState().setGameStatus('finished', data.winner, data.result);
     });
 
+    this.socket.on('elo_updated', (data: { newRating: number; change: number }) => {
+      const user = useGameStore.getState().user;
+      if (user) {
+        useGameStore.getState().setUser({ ...user, eloRating: data.newRating });
+      }
+    });
+
     this.socket.on('opponent_disconnected', (data: { winner: 'white' | 'black' }) => {
       useGameStore.getState().setGameStatus('finished', data.winner, 'disconnect');
     });
@@ -250,8 +257,20 @@ class SocketService {
 
   selectGender(gender: 'male' | 'female'): void {
     if (!this.socket) return;
+    const user = useGameStore.getState().user;
+    
     useGameStore.getState().setSelectedGender(gender);
-    this.socket.emit('select_gender', { gender });
+    
+    const matchmakingData = {
+      gender,
+      userId: user?.id,
+      eloRating: user?.eloRating || 1200,
+      latitude: user?.latitude,
+      longitude: user?.longitude,
+      preferredDistance: user?.preferredMatchDistance || Infinity
+    };
+    
+    this.socket.emit('select_gender', matchmakingData);
   }
 
   cancelMatchmaking(): void {

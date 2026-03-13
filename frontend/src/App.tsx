@@ -8,6 +8,10 @@ import AboutPage from './pages/AboutPage';
 import LoginPage from './pages/LoginPage';
 import SignUpPage from './pages/SignUpPage';
 import ProfilePage from './pages/ProfilePage';
+import ProfileSetupPage from './pages/ProfileSetupPage';
+import FindPlayerPage from './pages/FindPlayerPage';
+import FriendsPage from './pages/FriendsPage';
+import LeaderboardPage from './pages/LeaderboardPage';
 import AdminDashboard from './pages/AdminDashboard';
 import AchievementPopup from './components/AchievementPopup';
 import PopunderAd from './components/PopunderAd';
@@ -86,6 +90,10 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignUpPage />} />
             <Route path="/profile" element={token ? <ProfilePage /> : <Navigate to="/login" />} />
+            <Route path="/profile-setup" element={token ? <ProfileSetupPage /> : <Navigate to="/login" />} />
+            <Route path="/find" element={token ? <FindPlayerPage /> : <Navigate to="/login" />} />
+            <Route path="/friends" element={token ? <FriendsPage /> : <Navigate to="/login" />} />
+            <Route path="/leaderboard" element={token ? <LeaderboardPage /> : <Navigate to="/login" />} />
             <Route 
               path="/admin" 
               element={user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/" />} 

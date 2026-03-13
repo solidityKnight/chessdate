@@ -34,7 +34,13 @@ function matchmakingSocket(socket, io) {
 
       console.log(`Player ${socket.id} selected gender: ${gender}`);
 
-      const match = await matchmakingService.addToQueue(socket.id, gender, socket.user.id);
+      const match = await matchmakingService.addToQueue(socket.id, gender, {
+        userId: socket.user.id,
+        eloRating: data.eloRating,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        preferredDistance: data.preferredDistance
+      });
 
       if (match) {
         // Real match found — cancel any pending bot fallback for BOTH players
