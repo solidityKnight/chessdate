@@ -246,6 +246,34 @@ nav a:hover {
   transition: box-shadow 0.3s;
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes float {
+  0% { transform: translateY(0px) rotate(3deg); }
+  50% { transform: translateY(-20px) rotate(-3deg); }
+  100% { transform: translateY(0px) rotate(3deg); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.8s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.6s ease-out forwards;
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+
 .board:hover {
   box-shadow: 0 30px 55px -8px #c9455c80;
 }
