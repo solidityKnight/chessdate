@@ -36,8 +36,7 @@
     "pg-hstore": "^2.3.4",
     "redis": "^4.6.10",
     "sequelize": "^6.37.8",
-    "socket.io": "^4.7.4",
-    "stockfish": "18.0.5"
+    "socket.io": "^4.7.4"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
