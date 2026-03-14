@@ -21,28 +21,31 @@ const ProfilePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<any>({});
+  // FIX 1: Track whether we've already fetched so the effect only runs once.
+  const hasFetched = useRef(false);
   const navigate = useNavigate();
 
   useEffect(() => {
+    // FIX 1: Guard prevents re-running when setUser updates the `user` object,
+    // which previously caused an infinite fetch loop.
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+
     const fetchProfile = async () => {
       try {
         const response = await api.get('/user/profile');
         setRecentGames(response.data.recentGames);
-        
-        const profileUser = response.data.user;
-        if (profileUser) {
-          setEditData({
-            displayName: profileUser.displayName || '',
-            age: profileUser.age || '',
-            bio: profileUser.bio || '',
-            city: profileUser.city || '',
-            country: profileUser.country || '',
-            interests: profileUser.interests || [],
-            profilePhoto: profileUser.profilePhoto || '',
-            learnMode: profileUser.learnMode ?? true,
-          });
-          setUser(profileUser);
-        }
+        setEditData({
+          displayName: response.data.user?.displayName || '',
+          age: response.data.user?.age || '',
+          bio: response.data.user?.bio || '',
+          city: response.data.user?.city || '',
+          country: response.data.user?.country || '',
+          interests: response.data.user?.interests || [],
+          profilePhoto: response.data.user?.profilePhoto || '',
+          learnMode: response.data.user?.learnMode ?? true,
+        });
+        setUser(response.data.user);
       } catch (err) {
         console.error('Failed to fetch profile', err);
       } finally {
@@ -51,7 +54,7 @@ const ProfilePage: React.FC = () => {
     };
 
     fetchProfile();
-  }, [setUser]); // Dependencies are fine now that we don't guard with a ref
+  }, []); // FIX 1: Empty deps — fetch once on mount only.
 
   const handleLogout = () => {
     setUser(null);
@@ -128,7 +131,7 @@ const ProfilePage: React.FC = () => {
                       )}
                     </div>
                   </div>
-                  {user?.isOnline && (
+                  {(user as any).isOnline && (
                     <div className="absolute bottom-2 right-2 w-8 h-8 bg-green-500 rounded-full border-4 border-white shadow-lg animate-pulse" />
                   )}
                 </div>
@@ -444,7 +447,7 @@ const ProfilePage: React.FC = () => {
                 <div className="grid grid-cols-1 gap-4">
                   {recentGames.length > 0 ? (
                     recentGames.map((game, idx) => {
-                      const isWhite = game.whitePlayerId === user.id;
+                      const isWhite = String(game.whitePlayerId) === String(user.id);
                       const opponent = isWhite ? game.blackPlayer : game.whitePlayer;
                       const outcome =
                         game.winner === (isWhite ? 'white' : 'black')
