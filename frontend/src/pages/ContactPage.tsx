@@ -151,7 +151,7 @@ const ContactPage: React.FC = () => {
             animation-delay: 2s;
           }
           
-          .hover\:shadow-3xl:hover {
+          .hover\\:shadow-3xl:hover {
             box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
           }
           

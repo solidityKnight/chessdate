@@ -54,7 +54,7 @@ const ProfilePage: React.FC = () => {
     };
 
     fetchProfile();
-  }, []); // FIX 1: Empty deps — fetch once on mount only.
+  }, [setUser]); // Guard still keeps the fetch one-time while satisfying exhaustive-deps.
 
   const handleLogout = () => {
     setUser(null);
