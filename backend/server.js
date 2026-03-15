@@ -19,6 +19,7 @@ const matchmakingService          = require('./services/matchmakingService');
 const gameManager                 = require('./services/gameManager');
 const botService                  = require('./services/BotService');
 const settingsService             = require('./services/SettingsService');
+const presenceService             = require('./services/presenceService');
 const { redisClient, connectRedis } = require('./redis/redisClient');
 const { sequelize, User }         = require('./models');
 const jwt                         = require('jsonwebtoken');
@@ -159,6 +160,9 @@ app.use('/api/contact', require('./routes/contactRoutes'));
 app.use('/api/leaderboard', require('./routes/leaderboardRoutes'));
 app.use('/api/users/search', require('./routes/searchRoutes'));
 app.use('/api/follow', require('./routes/followRoutes'));
+app.use('/api/messages', require('./routes/messageRoutes'));
+app.use('/api/safety', require('./routes/safetyRoutes'));
+app.use('/api/saved-players', require('./routes/savedPlayerRoutes'));
 
 // ─── Health / debug endpoints ─────────────────────────────────────────────────
 
@@ -249,6 +253,8 @@ io.use(async (socket, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret_key');
       const user = await User.findByPk(decoded.id);
       if (user) {
+        user.lastActiveAt = new Date();
+        await user.save();
         socket.user = user;
         return next();
       }
@@ -263,6 +269,10 @@ io.use(async (socket, next) => {
 io.on('connection', (socket) => {
   console.log(`🔌 Connected: ${socket.id} via ${socket.conn.transport.name} (total: ${io.engine.clientsCount})`);
 
+  if (socket.user?.id) {
+    presenceService.setOnline(String(socket.user.id), socket.id);
+  }
+
   matchmakingSocket(socket, io);
   gameSocket(socket, io);
   chatSocket(socket, io);
@@ -270,6 +280,18 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', async (reason) => {
     console.log(`🔌 Disconnected: ${socket.id}, reason: ${reason}`);
+
+    presenceService.setOffline(socket.id);
+    if (socket.user?.id) {
+      try {
+        await User.update(
+          { lastActiveAt: new Date() },
+          { where: { id: socket.user.id } }
+        );
+      } catch (error) {
+        console.error('Failed to update last active time:', error);
+      }
+    }
 
     // Cancel any pending bot fallback timer
     botService.cancelFallbackTimer(socket.id);

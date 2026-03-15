@@ -1,38 +1,44 @@
 const { redisClient } = require('../redis/redisClient');
 const locationService = require('./locationService');
+const safetyService = require('./safetyService');
+const { normalizeMatchPreferences } = require('../utils/userPresentation');
 
 class MatchmakingService {
   constructor() {
-    this.maleQueue = 'male_queue';
-    this.femaleQueue = 'female_queue';
+    this.queueKey = 'matchmaking_queue';
     this.ELO_RANGE = 200;
   }
 
-  // Add player to matchmaking queue
-  async addToQueue(socketId, gender, userData = {}) {
+  async addToQueue(socketId, preferredGender, userData = {}) {
     try {
-      // Prevent duplicate entries
       await this.removeFromQueue(socketId);
 
-      const queue = gender === 'male' ? this.maleQueue : this.femaleQueue;
+      const matchPreferences =
+        preferredGender === 'any'
+          ? ['male', 'female']
+          : normalizeMatchPreferences(userData.matchPreferences || [preferredGender]);
 
-      // Add player to queue with detailed info
       const playerInfo = {
         socketId,
-        gender,
         userId: userData.userId || null,
+        selfGender: userData.selfGender || userData.gender || null,
+        matchPreferences,
         eloRating: userData.eloRating || 1200,
         latitude: userData.latitude || null,
         longitude: userData.longitude || null,
-        preferredDistance: userData.preferredDistance || Infinity,
+        preferredDistance:
+          Number.isFinite(Number(userData.preferredDistance))
+            ? Number(userData.preferredDistance)
+            : null,
         joinedAt: Date.now()
       };
 
-      await redisClient.rPush(queue, JSON.stringify(playerInfo));
+      await redisClient.rPush(this.queueKey, JSON.stringify(playerInfo));
 
-      console.log(`Player ${socketId} (${gender}) added to queue with Elo ${playerInfo.eloRating}`);
+      console.log(
+        `Player ${socketId} queued with preferences ${playerInfo.matchPreferences.join(',')} and Elo ${playerInfo.eloRating}`
+      );
 
-      // Check for potential match
       return await this.checkForMatch();
     } catch (error) {
       console.error('Error adding player to queue:', error);
@@ -40,23 +46,18 @@ class MatchmakingService {
     }
   }
 
-  // Remove player from queues by socketId
   async removeFromQueue(socketId) {
     try {
-      const queues = [this.maleQueue, this.femaleQueue];
+      const items = await redisClient.lRange(this.queueKey, 0, -1);
 
-      for (const queue of queues) {
-        const items = await redisClient.lRange(queue, 0, -1);
-
-        for (const item of items) {
-          try {
-            const parsed = JSON.parse(item);
-            if (parsed.socketId === socketId) {
-              await redisClient.lRem(queue, 0, item);
-            }
-          } catch {
-            // Ignore invalid JSON entries
+      for (const item of items) {
+        try {
+          const parsed = JSON.parse(item);
+          if (parsed.socketId === socketId) {
+            await redisClient.lRem(this.queueKey, 0, item);
           }
+        } catch {
+          // Ignore invalid queue entries
         }
       }
     } catch (error) {
@@ -64,70 +65,93 @@ class MatchmakingService {
     }
   }
 
-  // Check if there's a match available
+  isWithinDistance(playerA, playerB) {
+    const distance = locationService.getDistance(
+      playerA.latitude, playerA.longitude,
+      playerB.latitude, playerB.longitude
+    );
+
+    const playerAWithinRadius =
+      playerA.preferredDistance == null || distance <= playerA.preferredDistance;
+    const playerBWithinRadius =
+      playerB.preferredDistance == null || distance <= playerB.preferredDistance;
+
+    return playerAWithinRadius && playerBWithinRadius;
+  }
+
+  isPreferenceCompatible(playerA, playerB) {
+    if (!playerA.selfGender || !playerB.selfGender) return false;
+
+    const playerAPreferences = normalizeMatchPreferences(playerA.matchPreferences);
+    const playerBPreferences = normalizeMatchPreferences(playerB.matchPreferences);
+
+    return (
+      playerAPreferences.includes(playerB.selfGender) &&
+      playerBPreferences.includes(playerA.selfGender)
+    );
+  }
+
   async checkForMatch() {
     try {
-      const malePlayersData = await redisClient.lRange(this.maleQueue, 0, -1);
-      const femalePlayersData = await redisClient.lRange(this.femaleQueue, 0, -1);
+      const queueEntries = (await redisClient.lRange(this.queueKey, 0, -1))
+        .map((entry) => {
+          try {
+            return JSON.parse(entry);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
 
-      if (malePlayersData.length === 0 || femalePlayersData.length === 0) {
+      if (queueEntries.length < 2) {
         return null;
       }
 
-      // We'll iterate through one queue and try to find a match in the other
-      // To be fair, we'll start with the player who has been waiting longest
-      for (let i = 0; i < malePlayersData.length; i++) {
-        const malePlayer = JSON.parse(malePlayersData[i]);
-        
-        let bestMatchIdx = -1;
-        let bestMatchScore = -1;
+      for (let i = 0; i < queueEntries.length; i++) {
+        const playerA = queueEntries[i];
+        let bestMatchIndex = -1;
+        let bestScore = -1;
 
-        for (let j = 0; j < femalePlayersData.length; j++) {
-          const femalePlayer = JSON.parse(femalePlayersData[j]);
-          
-          // 1. Distance filter (Mutual check)
-          const distance = locationService.getDistance(
-            malePlayer.latitude, malePlayer.longitude,
-            femalePlayer.latitude, femalePlayer.longitude
-          );
+        for (let j = i + 1; j < queueEntries.length; j++) {
+          const playerB = queueEntries[j];
 
-          const maleWithinRadius = malePlayer.preferredDistance === Infinity || distance <= malePlayer.preferredDistance;
-          const femaleWithinRadius = femalePlayer.preferredDistance === Infinity || distance <= femalePlayer.preferredDistance;
+          if (!this.isPreferenceCompatible(playerA, playerB)) continue;
+          if (!this.isWithinDistance(playerA, playerB)) continue;
 
-          if (!maleWithinRadius || !femaleWithinRadius) continue;
-
-          // 2. Elo range filter (+/- 200)
-          const eloDiff = Math.abs(malePlayer.eloRating - femalePlayer.eloRating);
+          const eloDiff = Math.abs(playerA.eloRating - playerB.eloRating);
           if (eloDiff > this.ELO_RANGE) continue;
 
-          // If we are here, we have a valid match!
-          // Score the match based on wait time and Elo similarity
-          const eloScore = (this.ELO_RANGE - eloDiff) / this.ELO_RANGE;
-          const waitTimeScore = (Date.now() - femalePlayer.joinedAt) / 1000000; // Small weight for wait time
-          const currentScore = eloScore + waitTimeScore;
+          if (playerA.userId && playerB.userId) {
+            const blocked = await safetyService.areUsersBlocked(playerA.userId, playerB.userId);
+            if (blocked) continue;
+          }
 
-          if (currentScore > bestMatchScore) {
-            bestMatchScore = currentScore;
-            bestMatchIdx = j;
+          const oldestWait = Math.min(playerA.joinedAt, playerB.joinedAt);
+          const waitScore = (Date.now() - oldestWait) / 1000000;
+          const eloScore = (this.ELO_RANGE - eloDiff) / this.ELO_RANGE;
+          const currentScore = waitScore + eloScore;
+
+          if (currentScore > bestScore) {
+            bestScore = currentScore;
+            bestMatchIndex = j;
           }
         }
 
-        if (bestMatchIdx !== -1) {
-          // Found a match!
-          const femalePlayer = JSON.parse(femalePlayersData[bestMatchIdx]);
+        if (bestMatchIndex !== -1) {
+          const playerB = queueEntries[bestMatchIndex];
+          const entryA = JSON.stringify(playerA);
+          const entryB = JSON.stringify(playerB);
 
-          // Remove both from Redis
-          await redisClient.lRem(this.maleQueue, 0, malePlayersData[i]);
-          await redisClient.lRem(this.femaleQueue, 0, femalePlayersData[bestMatchIdx]);
+          await redisClient.lRem(this.queueKey, 0, entryA);
+          await redisClient.lRem(this.queueKey, 0, entryB);
 
-          // Randomly assign colors
-          const players = Math.random() < 0.5 ?
-            { white: malePlayer, black: femalePlayer } :
-            { white: femalePlayer, black: malePlayer };
+          const players = Math.random() < 0.5
+            ? { white: playerA, black: playerB }
+            : { white: playerB, black: playerA };
 
           return {
             gameId: this.generateGameId(),
-            players: players
+            players,
           };
         }
       }
@@ -139,21 +163,29 @@ class MatchmakingService {
     }
   }
 
-  // Generate unique game ID
   generateGameId() {
     return `game_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   }
 
-  // Get queue lengths for monitoring
   async getQueueStats() {
     try {
-      const maleCount = await redisClient.lLen(this.maleQueue);
-      const femaleCount = await redisClient.lLen(this.femaleQueue);
+      const queueEntries = (await redisClient.lRange(this.queueKey, 0, -1))
+        .map((entry) => {
+          try {
+            return JSON.parse(entry);
+          } catch {
+            return null;
+          }
+        })
+        .filter(Boolean);
+
+      const maleCount = queueEntries.filter((entry) => entry.selfGender === 'male').length;
+      const femaleCount = queueEntries.filter((entry) => entry.selfGender === 'female').length;
 
       return {
         male: maleCount,
         female: femaleCount,
-        total: maleCount + femaleCount
+        total: queueEntries.length
       };
     } catch (error) {
       console.error('Error getting queue stats:', error);

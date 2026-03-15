@@ -1,6 +1,11 @@
 import { io, Socket } from 'socket.io-client';
 import { useGameStore } from '../store/gameStore';
-import type { MoveRecord, GameStatus, ChatMessage } from '../store/gameStore';
+import type {
+  MoveRecord,
+  GameStatus,
+  ChatMessage,
+  PlayerPreview,
+} from '../store/gameStore';
 import { envConfig } from '../config/env';
 import { tokenStorage } from './tokenStorage';
 
@@ -149,6 +154,11 @@ class SocketService {
       board:         string;
       pickUpLine?:   string;
       players?:      { white: string; black: string };
+      playerProfiles?: {
+        white?: PlayerPreview | null;
+        black?: PlayerPreview | null;
+      };
+      opponentProfile?: PlayerPreview | null;
       whiteTime?:    number;
       blackTime?:    number;
       lastMoveAt?:   number;
@@ -187,6 +197,8 @@ class SocketService {
         whiteTime:  data.whiteTime,
         blackTime:  data.blackTime,
         lastMoveAt: data.lastMoveAt,
+        opponentProfile: data.opponentProfile,
+        playerProfiles: data.playerProfiles,
       });
     });
 
@@ -276,6 +288,10 @@ class SocketService {
       data.messages.forEach((msg) => useGameStore.getState().addChatMessage(msg));
     });
 
+    this.socket.on('friend_unread_updated', (data: { unreadCount?: number }) => {
+      useGameStore.getState().setUnreadFriendMessages(data.unreadCount || 0);
+    });
+
     this.socket.on('error', (data: { message?: string; event?: string }) => {
       const message = data?.message || 'Unknown error';
       useGameStore.getState().setError(message);
@@ -307,7 +323,7 @@ class SocketService {
 
   // ─── Matchmaking ──────────────────────────────────────────────────────────
 
-  selectGender(gender: 'male' | 'female'): void {
+  selectGender(gender: 'male' | 'female' | 'any'): void {
     if (!this.socket) return;
     const user = useGameStore.getState().user;
     
@@ -315,11 +331,12 @@ class SocketService {
     
     const matchmakingData = {
       gender,
+      matchPreferences: gender === 'any' ? ['male', 'female'] : [gender],
       userId: user?.id,
       eloRating: user?.eloRating || 1200,
       latitude: user?.latitude,
       longitude: user?.longitude,
-      preferredDistance: user?.preferredMatchDistance || Infinity
+      preferredDistance: user?.preferredMatchDistance ?? null
     };
     
     this.socket.emit('select_gender', matchmakingData);

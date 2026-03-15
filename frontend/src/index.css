@@ -98,6 +98,28 @@ body {
   border-radius: 999px;
 }
 
+.nav-link-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f43f5e, #fb7185);
+  color: white;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 24px -16px rgba(225, 29, 72, 0.95);
+}
+
 .navbar nav a:hover {
   border-color: rgba(255, 223, 229, 0.9);
   background: rgba(255, 255, 255, 0.75);

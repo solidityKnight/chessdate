@@ -1,37 +1,46 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import api from '../services/apiService';
 import RomanticLayout from '../components/RomanticLayout';
 import PlayerCard from '../components/PlayerCard';
-
-interface SearchUser {
-  id: string;
-  username: string;
-  displayName?: string;
-  eloRating: number;
-  profilePhoto?: string;
-  country?: string;
-}
+import DiscoveryFilters from '../components/DiscoveryFilters';
+import type { PlayerFilters, SocialUser } from '../types/social';
+import { DEFAULT_PLAYER_FILTERS } from '../types/social';
+import { buildDiscoveryParams } from '../utils/social';
 
 const suggestedQueries = ['Anand', 'Maya', 'Rapid', 'Coach'];
 
 const searchTips = [
   'Search by username or display name.',
-  'Two characters are enough to begin.',
-  'Use specific names to narrow the board quickly.',
+  'Filters work even without a text query.',
+  'Use message-ready and follower-only filters to find warmer leads faster.',
 ];
 
 const FindPlayerPage: React.FC = () => {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<SearchUser[]>([]);
+  const [filters, setFilters] = useState<PlayerFilters>(DEFAULT_PLAYER_FILTERS);
+  const [results, setResults] = useState<SocialUser[]>([]);
   const [loading, setLoading] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const trimmedQuery = query.trim();
-  const readyToSearch = trimmedQuery.length >= 2;
+  const hasFilters = useMemo(
+    () =>
+      Boolean(
+        filters.minElo ||
+          filters.maxElo ||
+          filters.country ||
+          filters.online ||
+          filters.followersOnly ||
+          filters.availableToMessage,
+      ),
+    [filters],
+  );
+  const readyToSearch = trimmedQuery.length >= 2 || hasFilters;
   const resultSummary = loading
     ? 'Scanning the player pool...'
     : readyToSearch
       ? `${results.length} player${results.length === 1 ? '' : 's'} found`
-      : 'Start with at least two characters';
+      : 'Start with two characters or use a filter';
 
   useEffect(() => {
     if (!readyToSearch) {
@@ -45,15 +54,14 @@ const FindPlayerPage: React.FC = () => {
 
     const timeoutId = window.setTimeout(async () => {
       try {
-        const response = await api.get(
-          `/users/search?q=${encodeURIComponent(trimmedQuery)}`
-        );
+        const params = buildDiscoveryParams(trimmedQuery, filters);
+        const response = await api.get(`/users/search?${params.toString()}`);
 
         if (isActive) {
           setResults(response.data);
         }
-      } catch (err) {
-        console.error('Search failed', err);
+      } catch (error) {
+        console.error('Search failed', error);
         if (isActive) {
           setResults([]);
         }
@@ -62,13 +70,13 @@ const FindPlayerPage: React.FC = () => {
           setLoading(false);
         }
       }
-    }, 350);
+    }, 300);
 
     return () => {
       isActive = false;
       window.clearTimeout(timeoutId);
     };
-  }, [readyToSearch, trimmedQuery]);
+  }, [filters, readyToSearch, refreshKey, trimmedQuery]);
 
   return (
     <RomanticLayout>
@@ -89,9 +97,8 @@ const FindPlayerPage: React.FC = () => {
                   Find players worth your next match.
                 </h1>
                 <p className="max-w-2xl text-base leading-8 text-slate-500 md:text-lg">
-                  Scout the community, compare profiles, and make your next game
-                  feel intentional. Search works best with real names, handles,
-                  and distinctive fragments.
+                  Search by name, then narrow the list by trust signals, Elo range,
+                  country, online status, and who you can already message.
                 </p>
               </div>
 
@@ -114,18 +121,18 @@ const FindPlayerPage: React.FC = () => {
                 </div>
                 <div className="page-stat-card rounded-[1.75rem] p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
-                    Suggested queries
+                    Saved prompts
                   </p>
                   <p className="mt-3 text-lg font-black text-slate-900">
-                    {suggestedQueries.length} ready
+                    {suggestedQueries.length}
                   </p>
                 </div>
                 <div className="page-stat-card rounded-[1.75rem] p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
-                    Best query
+                    Active filters
                   </p>
                   <p className="mt-3 text-lg font-black text-slate-900">
-                    2+ characters
+                    {Object.values(filters).filter(Boolean).length}
                   </p>
                 </div>
               </div>
@@ -138,34 +145,11 @@ const FindPlayerPage: React.FC = () => {
               <div className="relative z-10 space-y-5">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.24em] text-rose-200">
-                    Search notes
+                    Discovery notes
                   </p>
                   <h2 className="mt-3 text-2xl font-black tracking-tight text-white">
-                    Keep the player pool feeling easy to scan.
+                    Search smarter, not louder.
                   </h2>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-[1.5rem] border border-white/10 bg-white/6 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-200">
-                      Current query
-                    </p>
-                    <p className="mt-2 text-base font-semibold text-white">
-                      {readyToSearch ? trimmedQuery : 'Waiting for a clue'}
-                    </p>
-                  </div>
-                  <div className="rounded-[1.5rem] border border-white/10 bg-white/6 p-4">
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-200">
-                      Search mode
-                    </p>
-                    <p className="mt-2 text-base font-semibold text-white">
-                      {loading
-                        ? 'Refreshing results'
-                        : readyToSearch
-                          ? 'Live discovery'
-                          : 'Standby'}
-                    </p>
-                  </div>
                 </div>
 
                 <div className="space-y-3">
@@ -196,7 +180,7 @@ const FindPlayerPage: React.FC = () => {
                   className="w-full rounded-[1.85rem] border border-rose-100 bg-white px-5 py-5 pl-24 text-base font-medium text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-none transition duration-200 placeholder:text-slate-300 focus:border-rose-300 focus:ring-4 focus:ring-rose-200/50"
                   placeholder="Try a username, display name, or part of one..."
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(event) => setQuery(event.target.value)}
                 />
               </div>
 
@@ -212,6 +196,10 @@ const FindPlayerPage: React.FC = () => {
                   </button>
                 ))}
               </div>
+            </div>
+
+            <div className="mt-4">
+              <DiscoveryFilters filters={filters} onChange={setFilters} />
             </div>
           </div>
         </section>
@@ -235,10 +223,7 @@ const FindPlayerPage: React.FC = () => {
           <div className="mt-6 grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {loading &&
               [...Array(6)].map((_, index) => (
-                <div
-                  key={index}
-                  className="page-glass-card rounded-[2rem] p-6"
-                >
+                <div key={index} className="page-glass-card rounded-[2rem] p-6">
                   <div className="animate-pulse space-y-5">
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-4">
@@ -263,7 +248,12 @@ const FindPlayerPage: React.FC = () => {
             {!loading &&
               readyToSearch &&
               results.map((user) => (
-                <PlayerCard key={user.id} user={user} className="animate-slide-up" />
+                <PlayerCard
+                  key={user.id}
+                  user={user}
+                  className="animate-slide-up"
+                  onActionComplete={() => setRefreshKey((value) => value + 1)}
+                />
               ))}
           </div>
 
@@ -273,11 +263,11 @@ const FindPlayerPage: React.FC = () => {
                 Ready when you are
               </p>
               <h3 className="mt-3 text-2xl font-black tracking-tight text-slate-900">
-                Start with a name, handle, or clue.
+                Start with a name, handle, or a useful filter.
               </h3>
               <p className="mx-auto mt-4 max-w-2xl text-base leading-8 text-slate-500">
-                Search opens once you type two or more characters. From there,
-                the results update automatically.
+                You can search with text, or skip straight to filters like online,
+                follower-only, and available-to-message.
               </p>
             </div>
           )}
@@ -288,11 +278,11 @@ const FindPlayerPage: React.FC = () => {
                 No matches yet
               </p>
               <h3 className="mt-3 text-2xl font-black tracking-tight text-slate-900">
-                No players matched "{trimmedQuery}".
+                No players matched this search.
               </h3>
               <p className="mx-auto mt-4 max-w-2xl text-base leading-8 text-slate-500">
-                Try a shorter fragment, switch from full name to username, or use
-                one of the suggested searches above.
+                Try widening your Elo range, clearing one of the filters, or switching
+                from full names to usernames.
               </p>
             </div>
           )}

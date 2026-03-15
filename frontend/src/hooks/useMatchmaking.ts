@@ -1,11 +1,12 @@
 import { useCallback } from 'react';
 import { socketService } from '../services/socketService';
 import { useGameStore } from '../store/gameStore';
+import type { MatchSelection } from '../types/social';
 
 export const useMatchmaking = () => {
   const { isInQueue, selectedGender, queueStats } = useGameStore();
 
-  const selectGender = useCallback((gender: 'male' | 'female') => {
+  const selectGender = useCallback((gender: MatchSelection) => {
     socketService.selectGender(gender);
   }, []);
 

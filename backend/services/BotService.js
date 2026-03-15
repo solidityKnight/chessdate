@@ -76,7 +76,7 @@ class BotService {
   /**
    * Create a virtual bot player object.
    * @param {string} difficulty
-   * @param {'male'|'female'} botGender - opposite of the real player
+   * @param {'male'|'female'} botGender - preferred gender for the fallback bot
    * @returns {{ socketId: string, userId: string, difficulty: string, name: string, gender: string }}
    */
   createBotPlayer(difficulty, botGender) {
@@ -100,9 +100,9 @@ class BotService {
    * @param {string} socketId
    * @param {import('socket.io').Socket} socket
    * @param {import('socket.io').Server} io
-   * @param {string} playerGender - the real player's selected gender
+   * @param {string} preferredOpponentGender - the real player's selected preference
    */
-  startFallbackTimer(socketId, socket, io, playerGender) {
+  startFallbackTimer(socketId, socket, io, preferredOpponentGender) {
     // Check if bots are enabled
     if (!settingsService.areBotsEnabled()) {
       console.log(`🤖 Bot fallback skipped (bots disabled) for ${socketId}`);
@@ -119,7 +119,7 @@ class BotService {
 
       // Create and start a bot game
       try {
-        await this.startBotGame(socket, io, playerGender);
+        await this.startBotGame(socket, io, preferredOpponentGender);
         // Remove from queue ONLY if bot game started successfully
         const matchmakingService = require('./matchmakingService');
         await matchmakingService.removeFromQueue(socketId);
@@ -155,9 +155,9 @@ class BotService {
    *
    * @param {import('socket.io').Socket} socket - the human player's socket
    * @param {import('socket.io').Server} io
-   * @param {string} playerGender - the human's selected gender
+   * @param {string} preferredOpponentGender - preferred fallback opponent gender
    */
-  async startBotGame(socket, io, playerGender) {
+  async startBotGame(socket, io, preferredOpponentGender) {
     // Double-check bots are still enabled when timer fires
     if (!settingsService.areBotsEnabled()) {
       console.log(`🤖 Bot game skipped (bots disabled) for ${socket.id}`);
@@ -165,7 +165,11 @@ class BotService {
     }
 
     const difficulty = this.selectBotDifficulty();
-    const botGender = playerGender === 'male' ? 'female' : 'male';
+    const botGender = ['male', 'female'].includes(preferredOpponentGender)
+      ? preferredOpponentGender
+      : socket.user?.gender === 'male'
+        ? 'female'
+        : 'male';
     const botPlayer = this.createBotPlayer(difficulty, botGender);
 
     // Randomly assign colors

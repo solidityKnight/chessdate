@@ -1,59 +1,89 @@
 'use strict';
 
 const matchmakingService = require('../services/matchmakingService');
-const gameManager        = require('../services/gameManager');
-const aiService          = require('../services/aiService');
-const creditSystem       = require('../utils/creditSystem');
-const botService         = require('../services/BotService');
+const gameManager = require('../services/gameManager');
+const aiService = require('../services/aiService');
+const creditSystem = require('../utils/creditSystem');
+const botService = require('../services/BotService');
+const { User } = require('../models');
+
+const publicPlayerAttributes = [
+  'id',
+  'username',
+  'displayName',
+  'profilePhoto',
+  'isProfilePhotoVerified',
+  'lastActiveAt',
+  'country',
+];
 
 function matchmakingSocket(socket, io) {
+  const loadPlayerProfile = async (userId) => {
+    if (!userId || String(userId).startsWith('bot-')) {
+      return null;
+    }
+
+    const user = await User.findByPk(userId, {
+      attributes: publicPlayerAttributes,
+    });
+
+    return user ? user.toJSON() : null;
+  };
 
   socket.on('select_gender', async (data) => {
     try {
-      const { gender } = data;
+      const preferredGender = data?.gender || 'any';
 
       if (!socket.user) {
         socket.emit('error', { message: 'Please sign in to play' });
         return;
       }
 
-      // Regenerate credits before checking
       await creditSystem.regenerateCredits(socket.user);
 
       if (!creditSystem.canPlay(socket.user)) {
-        socket.emit('error', { 
-          message: 'You have run out of credits.' 
+        socket.emit('error', {
+          message: 'You have run out of credits.'
         });
         return;
       }
 
-      if (!['male', 'female'].includes(gender)) {
-        socket.emit('error', { message: 'Invalid gender selection' });
+      if (!['male', 'female', 'any'].includes(preferredGender)) {
+        socket.emit('error', { message: 'Invalid matchmaking preference' });
         return;
       }
 
-      console.log(`Player ${socket.id} selected gender: ${gender}`);
+      const requestedPreferences =
+        preferredGender === 'any' ? ['male', 'female'] : [preferredGender];
 
-      const match = await matchmakingService.addToQueue(socket.id, gender, {
+      console.log(
+        `Player ${socket.id} queued with preference: ${requestedPreferences.join(', ')}`
+      );
+
+      const match = await matchmakingService.addToQueue(socket.id, preferredGender, {
         userId: socket.user.id,
-        eloRating: data.eloRating,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        preferredDistance: data.preferredDistance
+        selfGender: socket.user.gender,
+        matchPreferences: data?.matchPreferences || requestedPreferences,
+        eloRating: data?.eloRating,
+        latitude: data?.latitude,
+        longitude: data?.longitude,
+        preferredDistance: data?.preferredDistance
       });
 
       if (match) {
-        // Real match found — cancel any pending bot fallback for BOTH players
         botService.cancelFallbackTimer(match.players.white.socketId);
         botService.cancelFallbackTimer(match.players.black.socketId);
 
         const gameState = await gameManager.createGame(match.gameId, match.players);
         const pickUpLine = await aiService.generateChessPickUpLine();
+        const [whiteProfile, blackProfile] = await Promise.all([
+          loadPlayerProfile(match.players.white.userId),
+          loadPlayerProfile(match.players.black.userId),
+        ]);
 
         const whiteSocketId = match.players.white.socketId;
         const blackSocketId = match.players.black.socketId;
 
-        // Join both sockets to the game room
         socket.join(match.gameId);
         io.sockets.sockets.get(
           socket.id === whiteSocketId ? blackSocketId : whiteSocketId
@@ -61,37 +91,50 @@ function matchmakingSocket(socket, io) {
 
         const commonPayload = {
           gameId: match.gameId,
-          board:  gameState.board,
+          board: gameState.board,
           pickUpLine,
           players: {
             white: whiteSocketId,
             black: blackSocketId,
           },
-          whiteTime:  gameState.whiteTime,
-          blackTime:  gameState.blackTime,
+          playerProfiles: {
+            white: whiteProfile,
+            black: blackProfile,
+          },
+          whiteTime: gameState.whiteTime,
+          blackTime: gameState.blackTime,
           lastMoveAt: gameState.lastMoveAt,
         };
 
         io.to(whiteSocketId).emit('game_start', {
           ...commonPayload,
-          playerColor:   'white',
+          playerColor: 'white',
           opponentColor: 'black',
+          opponentProfile: blackProfile,
         });
 
         io.to(blackSocketId).emit('game_start', {
           ...commonPayload,
-          playerColor:   'black',
+          playerColor: 'black',
           opponentColor: 'white',
+          opponentProfile: whiteProfile,
         });
 
-        console.log(`Game ${match.gameId} started — white: ${whiteSocketId}, black: ${blackSocketId}`);
-
+        console.log(
+          `Game ${match.gameId} started - white: ${whiteSocketId}, black: ${blackSocketId}`
+        );
       } else {
-        // No match found — start bot fallback timer (7–16 seconds)
-        botService.startFallbackTimer(socket.id, socket, io, gender);
+        const botPreference =
+          preferredGender === 'any'
+            ? socket.user.gender === 'male'
+              ? 'female'
+              : 'male'
+            : preferredGender;
+
+        botService.startFallbackTimer(socket.id, socket, io, botPreference);
 
         socket.emit('waiting_for_match', {
-          message:       'Waiting for an opponent...',
+          message: 'Waiting for an opponent...',
           queuePosition: await matchmakingService.getQueueStats(),
         });
       }
@@ -103,7 +146,6 @@ function matchmakingSocket(socket, io) {
 
   socket.on('cancel_matchmaking', async () => {
     try {
-      // Cancel bot fallback timer
       botService.cancelFallbackTimer(socket.id);
       await matchmakingService.removeFromQueue(socket.id);
       socket.emit('matchmaking_cancelled', { message: 'Matchmaking cancelled' });

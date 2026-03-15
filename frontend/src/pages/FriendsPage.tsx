@@ -1,66 +1,129 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../services/apiService';
 import { useSocket } from '../hooks/useSocket';
 import RomanticLayout from '../components/RomanticLayout';
+import { useGameStore } from '../store/gameStore';
+import type {
+  FriendMessage,
+  InboxSummary,
+  SaveKind,
+  SocialUser,
+} from '../types/social';
+import { formatConversationTime, formatLastActive } from '../utils/social';
 
-interface ConnectionUser {
-  id: string;
-  username: string;
-  displayName?: string;
-  profilePhoto?: string;
-  eloRating?: number;
-  country?: string;
-}
+const parseApiErrorMessage = (error: unknown, fallback: string) => {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'response' in error &&
+    typeof error.response === 'object' &&
+    error.response !== null &&
+    'data' in error.response &&
+    typeof error.response.data === 'object' &&
+    error.response.data !== null &&
+    'message' in error.response.data
+  ) {
+    return String(error.response.data.message);
+  }
 
-interface FriendMessage {
-  id: string;
-  senderId: string;
-  receiverId: string;
-  content: string;
-  createdAt: string;
-}
+  return fallback;
+};
 
 const FriendsPage: React.FC = () => {
-  const [followers, setFollowers] = useState<ConnectionUser[]>([]);
-  const [following, setFollowing] = useState<ConnectionUser[]>([]);
-  const [pendingFollowers, setPendingFollowers] = useState<ConnectionUser[]>([]);
-  const [pendingFollowing, setPendingFollowing] = useState<ConnectionUser[]>([]);
-  const [selectedContact, setSelectedContact] = useState<ConnectionUser | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [inbox, setInbox] = useState<InboxSummary[]>([]);
+  const [pendingFollowers, setPendingFollowers] = useState<SocialUser[]>([]);
+  const [selectedContactId, setSelectedContactId] = useState<string>(
+    searchParams.get('contact') || '',
+  );
   const [messages, setMessages] = useState<FriendMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { socket } = useSocket();
-  const [searchParams, setSearchParams] = useSearchParams();
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const setUnreadFriendMessages = useGameStore((state) => state.setUnreadFriendMessages);
 
-  const allContacts = useMemo(() => {
-    const seen = new Map<string, ConnectionUser>();
-    [...pendingFollowers, ...followers, ...following, ...pendingFollowing].forEach((user) => {
-      if (!seen.has(user.id)) {
-        seen.set(user.id, user);
-      }
-    });
-    return Array.from(seen.values());
-  }, [followers, following, pendingFollowers, pendingFollowing]);
+  const fetchInboxData = useCallback(async () => {
+    try {
+      const [inboxRes, pendingFollowersRes] = await Promise.all([
+        api.get('/messages/inbox'),
+        api.get('/follow/list?type=pending_followers'),
+      ]);
 
-  const selectedContactId = selectedContact?.id || '';
-
-  useEffect(() => {
-    fetchConnections();
+      setInbox(inboxRes.data);
+      setPendingFollowers(pendingFollowersRes.data);
+    } catch (error) {
+      console.error('Failed to fetch inbox', error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    const contactId = searchParams.get('contact');
-    if (!contactId || allContacts.length === 0) return;
+    fetchInboxData();
+  }, [fetchInboxData]);
 
-    const match = allContacts.find((user) => user.id === contactId);
-    if (match && selectedContact?.id !== match.id) {
-      setSelectedContact(match);
+  useEffect(() => {
+    const contactId = searchParams.get('contact') || '';
+    if (contactId !== selectedContactId) {
+      setSelectedContactId(contactId);
       setMessages([]);
-      setNewMessage('');
     }
-  }, [allContacts, searchParams, selectedContact?.id]);
+  }, [searchParams, selectedContactId]);
+
+  useEffect(() => {
+    if (!selectedContactId && inbox.length > 0) {
+      const firstConversation = inbox.find((entry) => !entry.blockedByThem) || inbox[0];
+      setSelectedContactId(firstConversation.user.id);
+      setSearchParams({ contact: firstConversation.user.id });
+    }
+  }, [inbox, selectedContactId, setSearchParams]);
+
+  const selectedConversation = useMemo(
+    () => inbox.find((entry) => entry.user.id === selectedContactId) || null,
+    [inbox, selectedContactId],
+  );
+
+  const totalUnread = useMemo(
+    () => inbox.reduce((sum, entry) => sum + entry.unreadCount, 0),
+    [inbox],
+  );
+
+  useEffect(() => {
+    setUnreadFriendMessages(totalUnread);
+  }, [setUnreadFriendMessages, totalUnread]);
+
+  useEffect(() => {
+    const friendId = selectedConversation?.user.id;
+    if (!socket || !friendId) return;
+
+    let cancelled = false;
+
+    const openConversation = async () => {
+      try {
+        const response = await api.post('/messages/mark-read', {
+          friendId,
+        });
+
+        if (!cancelled) {
+          setUnreadFriendMessages(response.data.unreadCount || 0);
+          socket.emit('join_friend_chat', { friendId });
+          fetchInboxData();
+        }
+      } catch (error) {
+        console.error('Failed to mark conversation as read', error);
+        socket.emit('join_friend_chat', { friendId });
+      }
+    };
+
+    openConversation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchInboxData, selectedConversation?.user.id, setUnreadFriendMessages, socket]);
 
   useEffect(() => {
     if (!socket) return;
@@ -80,140 +143,165 @@ const FriendsPage: React.FC = () => {
     const handleNewMessage = (message: FriendMessage) => {
       if (
         selectedContactId &&
-        (selectedContactId === message.senderId ||
-          selectedContactId === message.receiverId)
+        (selectedContactId === message.senderId || selectedContactId === message.receiverId)
       ) {
-        setMessages((prev) => [...prev, message]);
+        setMessages((current) =>
+          current.some((entry) => entry.id === message.id)
+            ? current
+            : [...current, message],
+        );
       }
+
+      fetchInboxData();
     };
 
-    const handleSocketError = (err: { message?: string }) => {
-      console.error('Socket error:', err);
+    const handleInboxUpdated = () => {
+      fetchInboxData();
+    };
+
+    const handleSocketError = (error: { message?: string }) => {
+      console.error('Socket error:', error);
     };
 
     socket.on('friend_chat_history', handleHistory);
     socket.on('new_friend_message', handleNewMessage);
+    socket.on('friend_inbox_updated', handleInboxUpdated);
     socket.on('error', handleSocketError);
 
     return () => {
       socket.off('friend_chat_history', handleHistory);
       socket.off('new_friend_message', handleNewMessage);
+      socket.off('friend_inbox_updated', handleInboxUpdated);
       socket.off('error', handleSocketError);
     };
-  }, [socket, selectedContactId]);
-
-  useEffect(() => {
-    if (socket && selectedContact) {
-      socket.emit('join_friend_chat', { friendId: selectedContact.id });
-    }
-  }, [socket, selectedContact]);
+  }, [fetchInboxData, selectedContactId, socket]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const fetchConnections = async () => {
-    try {
-      setLoading(true);
-      const [
-        followersRes,
-        followingRes,
-        pendingFollowersRes,
-        pendingFollowingRes,
-      ] = await Promise.all([
-        api.get('/follow/list?type=followers'),
-        api.get('/follow/list?type=following'),
-        api.get('/follow/list?type=pending_followers'),
-        api.get('/follow/list?type=pending_following'),
-      ]);
-
-      setFollowers(followersRes.data);
-      setFollowing(followingRes.data);
-      setPendingFollowers(pendingFollowersRes.data);
-      setPendingFollowing(pendingFollowingRes.data);
-    } catch (err) {
-      console.error('Failed to fetch follows', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAccept = async (followerId: string) => {
-    try {
-      await api.post('/follow/accept', { followerId });
-      await fetchConnections();
-    } catch (err) {
-      console.error('Failed to accept follow', err);
-    }
-  };
-
-  const handleSelectContact = (contact: ConnectionUser) => {
-    if (selectedContact?.id === contact.id) return;
-    setSelectedContact(contact);
+  const handleSelectContact = (contactId: string) => {
+    if (selectedContactId === contactId) return;
+    setSelectedContactId(contactId);
     setMessages([]);
     setNewMessage('');
-    setSearchParams({ contact: contact.id });
+    setSearchParams({ contact: contactId });
   };
 
   const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedContact || !socket) return;
+    if (!newMessage.trim() || !selectedConversation || !socket) return;
 
     socket.emit('send_friend_message', {
-      friendId: selectedContact.id,
+      friendId: selectedConversation.user.id,
       content: newMessage.trim(),
     });
     setNewMessage('');
   };
 
-  const sections = [
-    {
-      key: 'pending_followers',
-      title: 'Follower requests',
-      subtitle: 'They can already message you after following.',
-      users: pendingFollowers,
-      accent: 'text-rose-500',
-      badge: 'Requested',
-      action: (user: ConnectionUser) => (
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            handleAccept(user.id);
-          }}
-          className="rounded-full border border-rose-200 bg-rose-500 px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-white shadow-sm transition hover:bg-rose-600"
-        >
-          Accept
-        </button>
-      ),
-    },
-    {
-      key: 'followers',
-      title: 'Followers',
-      subtitle: 'People who follow you and can message you.',
-      users: followers,
-      accent: 'text-amber-600',
-      badge: 'Follows you',
-      action: null,
-    },
-    {
-      key: 'following',
-      title: 'Following',
-      subtitle: 'Players you follow and can message.',
-      users: following,
-      accent: 'text-slate-600',
-      badge: 'You follow',
-      action: null,
-    },
-    {
-      key: 'pending_following',
-      title: 'Awaiting reply',
-      subtitle: 'Your outgoing follow requests.',
-      users: pendingFollowing,
-      accent: 'text-sky-600',
-      badge: 'Pending',
-      action: null,
-    },
-  ];
+  const handleAccept = async (followerId: string) => {
+    setActionLoading(`accept-${followerId}`);
+    try {
+      await api.post('/follow/accept', { followerId });
+      await fetchInboxData();
+    } catch (error) {
+      window.alert(parseApiErrorMessage(error, 'Could not accept this follow request.'));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const toggleSafetyAction = async (type: 'mute' | 'block') => {
+    if (!selectedConversation) return;
+
+    const active = type === 'mute' ? selectedConversation.muted : selectedConversation.blocked;
+
+    if (type === 'block' && !active) {
+      const confirmed = window.confirm(
+        `Block ${selectedConversation.user.displayName || selectedConversation.user.username}?`,
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setActionLoading(type);
+
+    try {
+      if (active) {
+        await api.delete(`/safety/action/${type}/${selectedConversation.user.id}`);
+      } else {
+        await api.post('/safety/action', {
+          targetUserId: selectedConversation.user.id,
+          type,
+        });
+      }
+
+      await fetchInboxData();
+    } catch (error) {
+      window.alert(parseApiErrorMessage(error, `Could not ${type} this player.`));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleReport = async () => {
+    if (!selectedConversation) return;
+    const reason = window.prompt(
+      `Tell us why you want to report ${
+        selectedConversation.user.displayName || selectedConversation.user.username
+      }.`,
+    );
+    if (!reason?.trim()) return;
+
+    setActionLoading('report');
+
+    try {
+      await api.post('/safety/report', {
+        targetUserId: selectedConversation.user.id,
+        reason: reason.trim(),
+      });
+      window.alert('Report submitted. Thank you.');
+    } catch (error) {
+      window.alert(parseApiErrorMessage(error, 'Could not submit your report.'));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const toggleSavedKind = async (kind: SaveKind) => {
+    if (!selectedConversation) return;
+    const isSaved = selectedConversation.savedKinds.includes(kind);
+    setActionLoading(kind);
+
+    try {
+      if (isSaved) {
+        await api.delete('/saved-players', {
+          data: {
+            targetUserId: selectedConversation.user.id,
+            kind,
+          },
+        });
+      } else {
+        await api.post('/saved-players', {
+          targetUserId: selectedConversation.user.id,
+          kind,
+        });
+      }
+
+      await fetchInboxData();
+    } catch (error) {
+      window.alert(parseApiErrorMessage(error, 'Could not update saved players.'));
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const selectedUser = selectedConversation?.user;
+  const chatLocked =
+    !selectedConversation ||
+    selectedConversation.blocked ||
+    selectedConversation.blockedByThem ||
+    !selectedConversation.canMessage;
 
   return (
     <RomanticLayout>
@@ -231,31 +319,27 @@ const FriendsPage: React.FC = () => {
 
               <div className="space-y-4">
                 <h1 className="max-w-3xl text-4xl font-black tracking-tight text-slate-900 md:text-6xl md:leading-[0.95]">
-                  Your inbox for followers, replies, and new connections.
+                  Your inbox now feels alive, not hidden.
                 </h1>
                 <p className="max-w-2xl text-base leading-8 text-slate-500 md:text-lg">
-                  Anyone connected through a follow can start a conversation
-                  here. Pick a follower, a player you follow, or an open request
-                  to keep things moving.
+                  Follow-based chats now surface unread counts, last-message previews,
+                  and safety controls in one place. Open a thread to mark it read and
+                  keep the badge in sync everywhere.
                 </p>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="page-stat-card rounded-[1.75rem] p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
-                    Followers
+                    Conversations
                   </p>
-                  <p className="mt-3 text-2xl font-black text-slate-900">
-                    {followers.length}
-                  </p>
+                  <p className="mt-3 text-2xl font-black text-slate-900">{inbox.length}</p>
                 </div>
                 <div className="page-stat-card rounded-[1.75rem] p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
-                    Following
+                    Unread
                   </p>
-                  <p className="mt-3 text-2xl font-black text-slate-900">
-                    {following.length}
-                  </p>
+                  <p className="mt-3 text-2xl font-black text-rose-500">{totalUnread}</p>
                 </div>
                 <div className="page-stat-card rounded-[1.75rem] p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
@@ -267,10 +351,10 @@ const FriendsPage: React.FC = () => {
                 </div>
                 <div className="page-stat-card rounded-[1.75rem] p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
-                    Reachable chats
+                    Muted
                   </p>
                   <p className="mt-3 text-2xl font-black text-slate-900">
-                    {allContacts.length}
+                    {inbox.filter((entry) => entry.muted).length}
                   </p>
                 </div>
               </div>
@@ -279,21 +363,22 @@ const FriendsPage: React.FC = () => {
             <div className="page-dark-card rounded-[2.35rem] p-6 text-white">
               <div className="absolute right-0 top-0 h-36 w-36 rounded-full bg-rose-300/10 blur-3xl" />
               <div className="absolute bottom-0 left-0 h-28 w-28 rounded-full bg-amber-200/10 blur-3xl" />
+
               <div className="relative z-10 space-y-5">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.24em] text-rose-200">
-                    Messaging rules
+                    Safety controls
                   </p>
                   <h2 className="mt-3 text-2xl font-black tracking-tight text-white">
-                    Following unlocks the conversation.
+                    Mute, block, and report are built into every thread.
                   </h2>
                 </div>
 
                 <div className="space-y-3">
                   {[
-                    'Follower requests can open a conversation right away.',
-                    'Accepted followers stay in your inbox for future chats.',
-                    'Selecting a player loads your latest private message history.',
+                    'Unread counts disappear as soon as you open the conversation.',
+                    'Muted players stay connected but stop adding pressure to your badge count.',
+                    'Blocking stops follow, chat, and future matchmaking from both sides.',
                   ].map((item, index) => (
                     <div
                       key={item}
@@ -311,144 +396,321 @@ const FriendsPage: React.FC = () => {
           </div>
         </section>
 
-        <section className="mt-10 grid gap-8 xl:grid-cols-[0.92fr_1.08fr]">
+        <section className="mt-10 grid gap-8 xl:grid-cols-[0.94fr_1.06fr]">
           <div className="space-y-6">
-            {sections.map((section) => (
-              <article key={section.key} className="page-glass-card rounded-[2.2rem] p-5 md:p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className={`text-[10px] font-black uppercase tracking-[0.24em] ${section.accent}`}>
-                      {section.title}
-                    </p>
-                    <p className="mt-2 text-sm leading-7 text-slate-500">
-                      {section.subtitle}
-                    </p>
-                  </div>
-                  <span className="rounded-full border border-rose-100 bg-white/85 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-                    {section.users.length}
-                  </span>
+            <article className="page-glass-card rounded-[2.1rem] p-5 md:p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-rose-500">
+                    Requests
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-slate-500">
+                    Anyone who follows you can already message you. Accept them here
+                    to turn it into a fully mutual connection.
+                  </p>
                 </div>
+                <span className="rounded-full border border-rose-100 bg-white/85 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  {pendingFollowers.length}
+                </span>
+              </div>
 
-                <div className="mt-5 space-y-3">
-                  {loading ? (
-                    [...Array(2)].map((_, index) => (
-                      <div
-                        key={index}
-                        className="animate-pulse rounded-[1.5rem] border border-rose-100/70 bg-white/85 p-4"
-                      >
-                        <div className="flex items-center gap-4">
-                          <div className="h-12 w-12 rounded-[1rem] bg-rose-100" />
-                          <div className="flex-1 space-y-2">
-                            <div className="h-4 w-32 rounded-full bg-rose-100" />
-                            <div className="h-3 w-20 rounded-full bg-rose-50" />
+              <div className="mt-5 space-y-3">
+                {loading ? (
+                  [...Array(2)].map((_, index) => (
+                    <div
+                      key={index}
+                      className="animate-pulse rounded-[1.5rem] border border-rose-100/70 bg-white/85 p-4"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-[1rem] bg-rose-100" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 w-32 rounded-full bg-rose-100" />
+                          <div className="h-3 w-20 rounded-full bg-rose-50" />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : pendingFollowers.length > 0 ? (
+                  pendingFollowers.map((user) => (
+                    <div
+                      key={user.id}
+                      className="rounded-[1.5rem] border border-rose-100/70 bg-white/88 p-4"
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectContact(user.id)}
+                          className="flex min-w-0 flex-1 items-center gap-4 text-left"
+                        >
+                          <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-[1rem] border border-white bg-gradient-to-br from-rose-100 via-white to-amber-50 font-black uppercase text-rose-500 shadow-sm">
+                            {user.profilePhoto ? (
+                              <img
+                                src={user.profilePhoto}
+                                alt={user.username}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              user.username.charAt(0).toUpperCase()
+                            )}
+                          </div>
+
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-black text-slate-900">
+                              {user.displayName || user.username}
+                            </p>
+                            <p className="mt-1 truncate text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                              @{user.username}
+                            </p>
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleAccept(user.id)}
+                          disabled={actionLoading === `accept-${user.id}`}
+                          className="rounded-full border border-rose-200 bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-600 disabled:opacity-60"
+                        >
+                          Accept
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-[1.5rem] border border-dashed border-rose-200 bg-white/70 p-4 text-sm leading-7 text-slate-500">
+                    No pending follower requests right now.
+                  </div>
+                )}
+              </div>
+            </article>
+
+            <article className="page-glass-card rounded-[2.2rem] p-5 md:p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-rose-500">
+                    Inbox
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-slate-500">
+                    Sorted by the latest conversation. Muted threads stay visible but
+                    stop pulling focus.
+                  </p>
+                </div>
+                <span className="rounded-full border border-rose-100 bg-white/85 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                  {inbox.length}
+                </span>
+              </div>
+
+              <div className="mt-5 space-y-3">
+                {loading ? (
+                  [...Array(3)].map((_, index) => (
+                    <div
+                      key={index}
+                      className="animate-pulse rounded-[1.5rem] border border-rose-100/70 bg-white/85 p-4"
+                    >
+                      <div className="flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-[1rem] bg-rose-100" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 w-32 rounded-full bg-rose-100" />
+                          <div className="h-3 w-24 rounded-full bg-rose-50" />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : inbox.length > 0 ? (
+                  inbox.map((entry) => (
+                    <button
+                      key={entry.user.id}
+                      type="button"
+                      onClick={() => handleSelectContact(entry.user.id)}
+                      className={`w-full rounded-[1.5rem] border p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-rose-200 ${
+                        selectedConversation?.user.id === entry.user.id
+                          ? 'border-rose-200 bg-rose-50/85 shadow-[0_18px_40px_-30px_rgba(190,24,93,0.35)]'
+                          : 'border-rose-100/70 bg-white/88'
+                      } ${entry.muted ? 'opacity-80' : ''}`}
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex min-w-0 items-center gap-4">
+                          <div className="relative flex h-12 w-12 items-center justify-center overflow-hidden rounded-[1rem] border border-white bg-gradient-to-br from-rose-100 via-white to-amber-50 font-black uppercase text-rose-500 shadow-sm">
+                            {entry.user.profilePhoto ? (
+                              <img
+                                src={entry.user.profilePhoto}
+                                alt={entry.user.username}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              entry.user.username.charAt(0).toUpperCase()
+                            )}
+                            <span
+                              className={`absolute bottom-1 right-1 h-2.5 w-2.5 rounded-full border border-white ${
+                                entry.user.isOnline ? 'bg-emerald-400' : 'bg-slate-300'
+                              }`}
+                            />
+                          </div>
+
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="truncate text-sm font-black text-slate-900">
+                                {entry.user.displayName || entry.user.username}
+                              </p>
+                              {entry.user.isProfilePhotoVerified && (
+                                <span className="rounded-full border border-sky-100 bg-sky-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-sky-700">
+                                  Verified
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-1 truncate text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                              @{entry.user.username}
+                            </p>
+                            <p className="mt-2 truncate text-sm text-slate-500">
+                              {entry.lastMessagePreview || 'No messages yet'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex shrink-0 flex-col items-end gap-2">
+                          <span className="text-[11px] font-semibold text-slate-400">
+                            {formatConversationTime(entry.lastMessageAt)}
+                          </span>
+                          <div className="flex flex-wrap justify-end gap-2">
+                            {entry.unreadCount > 0 && (
+                              <span className="rounded-full border border-rose-200 bg-rose-500 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-white">
+                                {entry.unreadCount} new
+                              </span>
+                            )}
+                            {entry.muted && (
+                              <span className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                                Muted
+                              </span>
+                            )}
+                            {entry.savedKinds.includes('favorite') && (
+                              <span className="rounded-full border border-amber-100 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-amber-600">
+                                Favorite
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
-                    ))
-                  ) : section.users.length > 0 ? (
-                    section.users.map((user) => (
-                      <button
-                        key={`${section.key}-${user.id}`}
-                        type="button"
-                        onClick={() => handleSelectContact(user)}
-                        className={`w-full rounded-[1.5rem] border p-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-rose-200 ${
-                          selectedContact?.id === user.id
-                            ? 'border-rose-200 bg-rose-50/85 shadow-[0_18px_40px_-30px_rgba(190,24,93,0.35)]'
-                            : 'border-rose-100/70 bg-white/88'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex min-w-0 items-center gap-4">
-                            <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-[1rem] border border-white bg-gradient-to-br from-rose-100 via-white to-amber-50 font-black uppercase text-rose-500 shadow-sm">
-                              {user.profilePhoto ? (
-                                <img
-                                  src={user.profilePhoto}
-                                  alt={user.username}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                user.username.charAt(0).toUpperCase()
-                              )}
-                            </div>
-
-                            <div className="min-w-0">
-                              <p className="truncate text-sm font-black text-slate-900">
-                                {user.displayName || user.username}
-                              </p>
-                              <p className="mt-1 truncate text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
-                                @{user.username}
-                              </p>
-                              <p className="mt-2 text-xs font-medium text-slate-500">
-                                Elo {user.eloRating || 1200}
-                                {user.country ? ` - ${user.country}` : ''}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex shrink-0 flex-col items-end gap-2">
-                            <span className="rounded-full border border-rose-100 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] text-rose-500">
-                              {section.badge}
-                            </span>
-                            {section.action ? section.action(user) : null}
-                          </div>
-                        </div>
-                      </button>
-                    ))
-                  ) : (
-                    <div className="rounded-[1.5rem] border border-dashed border-rose-200 bg-white/70 p-4 text-sm leading-7 text-slate-500">
-                      No players in this section yet.
-                    </div>
-                  )}
-                </div>
-              </article>
-            ))}
+                    </button>
+                  ))
+                ) : (
+                  <div className="rounded-[1.5rem] border border-dashed border-rose-200 bg-white/70 p-4 text-sm leading-7 text-slate-500">
+                    No conversations yet. Follow someone or accept a request to get the
+                    inbox moving.
+                  </div>
+                )}
+              </div>
+            </article>
           </div>
 
-          <article className="page-glass-card flex min-h-[620px] flex-col overflow-hidden rounded-[2.45rem]">
-            {selectedContact ? (
+          <article className="page-glass-card flex min-h-[680px] flex-col overflow-hidden rounded-[2.45rem]">
+            {selectedConversation && selectedUser ? (
               <>
                 <div className="border-b border-rose-100/80 px-6 py-5 md:px-8">
-                  <div className="flex items-center justify-between gap-4">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                     <div className="flex min-w-0 items-center gap-4">
-                      <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-[1.15rem] border border-white bg-gradient-to-br from-rose-100 via-white to-amber-50 font-black uppercase text-rose-500 shadow-sm">
-                        {selectedContact.profilePhoto ? (
+                      <div className="relative flex h-14 w-14 items-center justify-center overflow-hidden rounded-[1.15rem] border border-white bg-gradient-to-br from-rose-100 via-white to-amber-50 font-black uppercase text-rose-500 shadow-sm">
+                        {selectedUser.profilePhoto ? (
                           <img
-                            src={selectedContact.profilePhoto}
-                            alt={selectedContact.username}
+                            src={selectedUser.profilePhoto}
+                            alt={selectedUser.username}
                             className="h-full w-full object-cover"
                           />
                         ) : (
-                          selectedContact.username.charAt(0).toUpperCase()
+                          selectedUser.username.charAt(0).toUpperCase()
                         )}
+                        <span
+                          className={`absolute bottom-1 right-1 h-3 w-3 rounded-full border border-white ${
+                            selectedUser.isOnline ? 'bg-emerald-400' : 'bg-slate-300'
+                          }`}
+                        />
                       </div>
                       <div className="min-w-0">
                         <p className="text-[10px] font-black uppercase tracking-[0.24em] text-rose-500">
                           Active conversation
                         </p>
                         <h2 className="mt-2 truncate text-2xl font-black tracking-tight text-slate-900">
-                          {selectedContact.displayName || selectedContact.username}
+                          {selectedUser.displayName || selectedUser.username}
                         </h2>
                         <p className="mt-1 truncate text-sm text-slate-500">
-                          @{selectedContact.username}
-                          {selectedContact.country ? ` - ${selectedContact.country}` : ''}
+                          @{selectedUser.username}
+                          {selectedUser.country ? ` - ${selectedUser.country}` : ''}
+                        </p>
+                        <p className="mt-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
+                          {formatLastActive(
+                            selectedUser.lastActiveAt,
+                            selectedUser.isOnline,
+                          )}
                         </p>
                       </div>
                     </div>
 
-                    <span className="rounded-full border border-rose-100 bg-white/85 px-4 py-2 text-sm font-semibold text-slate-500 shadow-sm">
-                      Private messages
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleSavedKind('favorite')}
+                        disabled={actionLoading === 'favorite'}
+                        className="rounded-full border border-amber-100 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-amber-600 transition hover:border-amber-200 hover:bg-amber-50 disabled:opacity-60"
+                      >
+                        {selectedConversation.savedKinds.includes('favorite')
+                          ? 'Favorited'
+                          : 'Favorite'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleSavedKind('rematch_later')}
+                        disabled={actionLoading === 'rematch_later'}
+                        className="rounded-full border border-sky-100 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-sky-600 transition hover:border-sky-200 hover:bg-sky-50 disabled:opacity-60"
+                      >
+                        {selectedConversation.savedKinds.includes('rematch_later')
+                          ? 'Saved rematch'
+                          : 'Rematch later'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleSafetyAction('mute')}
+                        disabled={actionLoading === 'mute' || selectedConversation.blocked}
+                        className="rounded-full border border-rose-100 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-slate-600 transition hover:border-rose-200 hover:text-rose-500 disabled:opacity-60"
+                      >
+                        {selectedConversation.muted ? 'Unmute' : 'Mute'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleSafetyAction('block')}
+                        disabled={actionLoading === 'block'}
+                        className="rounded-full border border-rose-100 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-slate-600 transition hover:border-rose-200 hover:text-rose-500 disabled:opacity-60"
+                      >
+                        {selectedConversation.blocked ? 'Unblock' : 'Block'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleReport}
+                        disabled={actionLoading === 'report'}
+                        className="rounded-full border border-rose-100 bg-white px-4 py-2 text-xs font-black uppercase tracking-[0.18em] text-slate-600 transition hover:border-rose-200 hover:text-rose-500 disabled:opacity-60"
+                      >
+                        Report
+                      </button>
+                    </div>
                   </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto bg-gradient-to-b from-white/70 to-rose-50/30 px-6 py-6 md:px-8">
+                  {chatLocked && (
+                    <div className="mb-4 rounded-[1.5rem] border border-rose-100 bg-white/90 p-4 text-sm leading-7 text-slate-500">
+                      {selectedConversation.blocked
+                        ? 'You blocked this player. Unblock them to continue chatting.'
+                        : selectedConversation.blockedByThem
+                          ? 'This player has blocked you, so the conversation is now locked.'
+                          : 'Follow-based messaging is not currently available for this conversation.'}
+                    </div>
+                  )}
+
                   <div className="space-y-4">
                     {messages.length > 0 ? (
-                      messages.map((msg) => {
-                        const isMe = msg.senderId !== selectedContact.id;
+                      messages.map((message) => {
+                        const isMe = message.senderId !== selectedUser.id;
+
                         return (
                           <div
-                            key={msg.id}
+                            key={message.id}
                             className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
                           >
                             <div
@@ -458,13 +720,13 @@ const FriendsPage: React.FC = () => {
                                   : 'rounded-tl-md border border-rose-100 bg-white text-slate-700'
                               }`}
                             >
-                              <p className="leading-7">{msg.content}</p>
+                              <p className="leading-7">{message.content}</p>
                               <span
                                 className={`mt-2 block text-[10px] font-semibold uppercase tracking-[0.14em] ${
                                   isMe ? 'text-rose-100/80' : 'text-slate-400'
                                 }`}
                               >
-                                {new Date(msg.createdAt).toLocaleTimeString([], {
+                                {new Date(message.createdAt).toLocaleTimeString([], {
                                   hour: '2-digit',
                                   minute: '2-digit',
                                 })}
@@ -479,11 +741,11 @@ const FriendsPage: React.FC = () => {
                           Conversation ready
                         </p>
                         <h3 className="mt-3 text-2xl font-black tracking-tight text-slate-900">
-                          Say hello to {selectedContact.displayName || selectedContact.username}.
+                          Say hello to {selectedUser.displayName || selectedUser.username}.
                         </h3>
                         <p className="mx-auto mt-4 max-w-lg text-base leading-8 text-slate-500">
-                          Messages will appear here as soon as the conversation
-                          starts.
+                          Your last message preview and unread state will start updating
+                          as soon as the thread begins.
                         </p>
                       </div>
                     )}
@@ -495,12 +757,15 @@ const FriendsPage: React.FC = () => {
                   <div className="flex gap-3">
                     <input
                       type="text"
-                      className="flex-1 rounded-[1.4rem] border border-rose-100 bg-white px-5 py-4 text-sm text-slate-700 outline-none transition focus:border-rose-300 focus:ring-4 focus:ring-rose-200/40"
-                      placeholder="Write a message..."
+                      className="flex-1 rounded-[1.4rem] border border-rose-100 bg-white px-5 py-4 text-sm text-slate-700 outline-none transition focus:border-rose-300 focus:ring-4 focus:ring-rose-200/40 disabled:cursor-not-allowed disabled:bg-slate-100"
+                      placeholder={
+                        chatLocked ? 'This conversation is currently unavailable.' : 'Write a message...'
+                      }
                       value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
+                      onChange={(event) => setNewMessage(event.target.value)}
+                      disabled={chatLocked}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
                           handleSendMessage();
                         }
                       }}
@@ -508,7 +773,8 @@ const FriendsPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleSendMessage}
-                      className="rounded-[1.4rem] bg-rose-500 px-5 py-4 text-sm font-black uppercase tracking-[0.18em] text-white shadow-[0_18px_36px_-24px_rgba(190,24,93,0.65)] transition hover:bg-rose-600"
+                      disabled={chatLocked || !newMessage.trim()}
+                      className="rounded-[1.4rem] bg-rose-500 px-5 py-4 text-sm font-black uppercase tracking-[0.18em] text-white shadow-[0_18px_36px_-24px_rgba(190,24,93,0.65)] transition hover:bg-rose-600 disabled:opacity-60"
                     >
                       Send
                     </button>
@@ -521,11 +787,11 @@ const FriendsPage: React.FC = () => {
                   Inbox
                 </p>
                 <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-900">
-                  Pick a follower or connection to start messaging.
+                  Pick a conversation to open the live thread.
                 </h2>
                 <p className="mt-4 max-w-lg text-base leading-8 text-slate-500">
-                  Followers, accepted connections, and outgoing follow requests
-                  all appear on the left. Select one to open the private chat.
+                  The left side keeps previews, unread chips, and follower requests all
+                  in one place.
                 </p>
               </div>
             )}

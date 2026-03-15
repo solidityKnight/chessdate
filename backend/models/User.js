@@ -69,6 +69,10 @@ const User = sequelize.define('User', {
     type: DataTypes.STRING,
     allowNull: true
   },
+  isProfilePhotoVerified: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false
+  },
   // Location
   latitude: {
     type: DataTypes.FLOAT,
@@ -90,9 +94,17 @@ const User = sequelize.define('User', {
     type: DataTypes.INTEGER,
     defaultValue: 100 // Default 100km
   },
+  matchPreferences: {
+    type: DataTypes.JSONB,
+    defaultValue: ['male', 'female']
+  },
   learnMode: {
     type: DataTypes.BOOLEAN,
     defaultValue: true
+  },
+  lastActiveAt: {
+    type: DataTypes.DATE,
+    defaultValue: DataTypes.NOW
   },
   // Stats
   eloRating: {

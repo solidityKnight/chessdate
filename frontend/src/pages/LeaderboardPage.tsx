@@ -1,101 +1,66 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import api from '../services/apiService';
 import RomanticLayout from '../components/RomanticLayout';
 import EloBadge from '../components/EloBadge';
+import DiscoveryFilters from '../components/DiscoveryFilters';
+import type { PlayerFilters, SocialUser } from '../types/social';
+import { DEFAULT_PLAYER_FILTERS } from '../types/social';
+import { buildDiscoveryParams, formatLastActive } from '../utils/social';
 
-interface LeaderboardPlayer {
-  id: number | string;
-  username: string;
-  displayName?: string;
-  profilePhoto?: string;
-  country?: string;
-  eloRating: number;
-  wins: number;
-  losses: number;
-  draws: number;
-}
-
-const getWinRate = (player: LeaderboardPlayer) => {
-  const totalGames = player.wins + player.losses + player.draws;
-  return totalGames > 0 ? Math.round((player.wins / totalGames) * 100) : 0;
+const getWinRate = (player: SocialUser) => {
+  const totalGames = (player.wins || 0) + (player.losses || 0) + (player.draws || 0);
+  return totalGames > 0 ? Math.round(((player.wins || 0) / totalGames) * 100) : 0;
 };
 
 const LeaderboardPage: React.FC = () => {
-  const [players, setPlayers] = useState<LeaderboardPlayer[]>([]);
+  const [players, setPlayers] = useState<SocialUser[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState<PlayerFilters>(DEFAULT_PLAYER_FILTERS);
 
   useEffect(() => {
+    let active = true;
+
     const fetchLeaderboard = async () => {
       try {
-        const response = await api.get('/leaderboard');
-        setPlayers(response.data);
-      } catch (err) {
-        console.error('Failed to fetch leaderboard', err);
+        setLoading(true);
+        const params = buildDiscoveryParams(null, filters);
+        const response = await api.get(`/leaderboard?${params.toString()}`);
+
+        if (active) {
+          setPlayers(response.data);
+        }
+      } catch (error) {
+        console.error('Failed to fetch leaderboard', error);
       } finally {
-        setLoading(false);
+        if (active) {
+          setLoading(false);
+        }
       }
     };
 
     fetchLeaderboard();
-  }, []);
+
+    return () => {
+      active = false;
+    };
+  }, [filters]);
 
   const leader = players[0];
   const averageElo = players.length
     ? Math.round(
-        players.reduce((total, player) => total + player.eloRating, 0) /
-          players.length
+        players.reduce((total, player) => total + (player.eloRating || 0), 0) /
+          players.length,
       )
     : 0;
-  const countryCount = new Set(
-    players.map((player) => player.country).filter(Boolean)
-  ).size;
+  const countryCount = new Set(players.map((player) => player.country).filter(Boolean)).size;
   const highestWinRate = players.reduce(
     (best, player) => Math.max(best, getWinRate(player)),
-    0
+    0,
   );
-
-  const podiumEntries = [
-    players[1]
-      ? {
-          player: players[1],
-          place: 2,
-          label: 'Runner-up',
-          cardClass:
-            'border-slate-200/85 bg-white/90 md:mt-10 hover:shadow-[0_42px_90px_-40px_rgba(148,163,184,0.4)]',
-          accentClass: 'bg-slate-100 text-slate-700 border border-slate-200',
-          haloClass: 'bg-slate-200/50',
-        }
-      : null,
-    players[0]
-      ? {
-          player: players[0],
-          place: 1,
-          label: 'Champion',
-          cardClass:
-            'border-amber-200/90 bg-gradient-to-b from-white via-amber-50/85 to-rose-50/75 md:-mt-8 md:scale-[1.03] shadow-[0_50px_110px_-42px_rgba(245,158,11,0.38)]',
-          accentClass: 'bg-amber-100 text-amber-700 border border-amber-200',
-          haloClass: 'bg-amber-300/45',
-        }
-      : null,
-    players[2]
-      ? {
-          player: players[2],
-          place: 3,
-          label: 'On the podium',
-          cardClass:
-            'border-orange-200/85 bg-white/90 md:mt-14 hover:shadow-[0_42px_90px_-40px_rgba(249,115,22,0.36)]',
-          accentClass: 'bg-orange-100 text-orange-700 border border-orange-200',
-          haloClass: 'bg-orange-200/50',
-        }
-      : null,
-  ].filter(Boolean) as Array<{
-    player: LeaderboardPlayer;
-    place: number;
-    label: string;
-    cardClass: string;
-    accentClass: string;
-    haloClass: string;
-  }>;
+  const activeFilterCount = useMemo(
+    () => Object.values(filters).filter(Boolean).length,
+    [filters],
+  );
 
   return (
     <RomanticLayout>
@@ -116,9 +81,8 @@ const LeaderboardPage: React.FC = () => {
                   Leaderboard built like a main event.
                 </h1>
                 <p className="max-w-2xl text-base leading-8 text-slate-500 md:text-lg">
-                  Track the strongest players in the room, compare records at a
-                  glance, and see who is converting good positions into real
-                  results.
+                  Rank the strongest players, then filter the table by trust, reach,
+                  and message availability so the leaderboard can double as discovery.
                 </p>
               </div>
 
@@ -149,10 +113,10 @@ const LeaderboardPage: React.FC = () => {
                 </div>
                 <div className="page-stat-card rounded-[1.75rem] p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
-                    Top win rate
+                    Active filters
                   </p>
                   <p className="mt-3 text-2xl font-black text-slate-900">
-                    {loading ? '--' : `${highestWinRate}%`}
+                    {activeFilterCount}
                   </p>
                 </div>
               </div>
@@ -192,41 +156,30 @@ const LeaderboardPage: React.FC = () => {
                     </div>
 
                     <EloBadge
-                      rating={leader.eloRating}
+                      rating={leader.eloRating || 1200}
                       className="border-white/10 bg-white/10 text-white [&>span:first-child]:bg-white/15 [&>span:last-child]:text-white"
                     />
 
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                          Wins
+                          Win rate
                         </p>
-                        <p className="mt-2 text-xl font-black">{leader.wins}</p>
+                        <p className="mt-2 text-xl font-black">{getWinRate(leader)}%</p>
                       </div>
                       <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                          Losses
+                          Last active
                         </p>
-                        <p className="mt-2 text-xl font-black">{leader.losses}</p>
+                        <p className="mt-2 text-xl font-black">
+                          {formatLastActive(leader.lastActiveAt, leader.isOnline)}
+                        </p>
                       </div>
                       <div className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4">
                         <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                          Draws
+                          Top win rate
                         </p>
-                        <p className="mt-2 text-xl font-black">{leader.draws}</p>
-                      </div>
-                    </div>
-
-                    <div className="rounded-[1.75rem] border border-white/10 bg-white/6 p-4">
-                      <div className="flex items-center justify-between text-sm font-semibold text-slate-300">
-                        <span>Win rate</span>
-                        <span>{getWinRate(leader)}%</span>
-                      </div>
-                      <div className="mt-3 h-2 rounded-full bg-white/10">
-                        <div
-                          className="h-2 rounded-full bg-gradient-to-r from-rose-300 to-amber-300"
-                          style={{ width: `${getWinRate(leader)}%` }}
-                        />
+                        <p className="mt-2 text-xl font-black">{highestWinRate}%</p>
                       </div>
                     </div>
                   </div>
@@ -239,135 +192,11 @@ const LeaderboardPage: React.FC = () => {
               </div>
             </div>
           </div>
+
+          <div className="mt-8">
+            <DiscoveryFilters filters={filters} onChange={setFilters} />
+          </div>
         </section>
-
-        {loading ? (
-          <section className="mt-10 grid gap-6 md:grid-cols-3">
-            {[...Array(3)].map((_, index) => (
-              <div
-                key={index}
-                className="page-glass-card rounded-[2.25rem] p-6"
-              >
-                <div className="animate-pulse space-y-5">
-                  <div className="flex items-start justify-between">
-                    <div className="h-7 w-24 rounded-full bg-rose-100" />
-                    <div className="h-7 w-10 rounded-full bg-rose-50" />
-                  </div>
-                  <div className="h-20 w-20 rounded-[1.5rem] bg-rose-100" />
-                  <div className="space-y-2">
-                    <div className="h-5 w-40 rounded-full bg-rose-100" />
-                    <div className="h-4 w-24 rounded-full bg-rose-50" />
-                  </div>
-                  <div className="h-10 w-28 rounded-full bg-rose-100" />
-                  <div className="h-2 rounded-full bg-rose-50" />
-                </div>
-              </div>
-            ))}
-          </section>
-        ) : players.length > 0 ? (
-          <section className="mt-10 grid gap-6 md:grid-cols-3">
-            {podiumEntries.map(
-              ({
-                player,
-                place,
-                label,
-                cardClass,
-                accentClass,
-                haloClass,
-              }) => {
-                const winRate = getWinRate(player);
-
-                return (
-                  <article
-                    key={player.id}
-                    className={`page-glass-card relative rounded-[2.25rem] p-6 transition duration-500 hover:-translate-y-1 ${cardClass}`}
-                  >
-                    <div className={`absolute -right-10 -top-10 h-28 w-28 rounded-full blur-3xl ${haloClass}`} />
-                    <div className="relative z-10">
-                      <div className="flex items-start justify-between gap-4">
-                        <span className={`rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] ${accentClass}`}>
-                          {label}
-                        </span>
-                        <span className="text-4xl font-black tracking-tight text-slate-300">
-                          {place}
-                        </span>
-                      </div>
-
-                      <div className="mt-5 flex items-center gap-4">
-                        <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-[1.5rem] border border-white/80 bg-white text-2xl font-black uppercase text-rose-600 shadow-lg">
-                          {player.profilePhoto ? (
-                            <img
-                              src={player.profilePhoto}
-                              alt={player.username}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            player.username.charAt(0).toUpperCase()
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <h3 className="truncate text-2xl font-black tracking-tight text-slate-900">
-                            {player.displayName || player.username}
-                          </h3>
-                          <p className="mt-1 truncate text-sm font-medium text-slate-400">
-                            @{player.username}
-                          </p>
-                          <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
-                            {player.country || 'Global community'}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="mt-5">
-                        <EloBadge rating={player.eloRating} />
-                      </div>
-
-                      <div className="mt-6 space-y-3">
-                        <div className="flex items-center justify-between text-sm font-semibold text-slate-500">
-                          <span>Win rate</span>
-                          <span>{winRate}%</span>
-                        </div>
-                        <div className="h-2 rounded-full bg-rose-100">
-                          <div
-                            className="h-2 rounded-full bg-gradient-to-r from-rose-400 to-amber-400"
-                            style={{ width: `${winRate}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="mt-6 grid grid-cols-3 gap-3">
-                        <div className="rounded-[1.25rem] border border-white/70 bg-white/80 p-3 text-center">
-                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                            W
-                          </p>
-                          <p className="mt-2 text-lg font-black text-slate-900">
-                            {player.wins}
-                          </p>
-                        </div>
-                        <div className="rounded-[1.25rem] border border-white/70 bg-white/80 p-3 text-center">
-                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                            L
-                          </p>
-                          <p className="mt-2 text-lg font-black text-slate-900">
-                            {player.losses}
-                          </p>
-                        </div>
-                        <div className="rounded-[1.25rem] border border-white/70 bg-white/80 p-3 text-center">
-                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">
-                            D
-                          </p>
-                          <p className="mt-2 text-lg font-black text-slate-900">
-                            {player.draws}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </article>
-                );
-              }
-            )}
-          </section>
-        ) : null}
 
         <section className="page-glass-card mt-10 overflow-hidden rounded-[2.5rem]">
           <div className="flex flex-col gap-4 border-b border-rose-100/80 px-6 py-6 md:flex-row md:items-end md:justify-between md:px-8">
@@ -404,183 +233,86 @@ const LeaderboardPage: React.FC = () => {
               ))}
             </div>
           ) : players.length > 0 ? (
-            <>
-              <div className="hidden overflow-x-auto md:block">
-                <table className="min-w-full text-left">
-                  <thead>
-                    <tr className="border-b border-rose-100/80 bg-rose-50/65">
-                      <th className="px-8 py-4 text-[10px] font-black uppercase tracking-[0.22em] text-rose-500">
-                        Rank
-                      </th>
-                      <th className="px-8 py-4 text-[10px] font-black uppercase tracking-[0.22em] text-rose-500">
-                        Player
-                      </th>
-                      <th className="px-8 py-4 text-[10px] font-black uppercase tracking-[0.22em] text-rose-500">
-                        Rating
-                      </th>
-                      <th className="px-8 py-4 text-[10px] font-black uppercase tracking-[0.22em] text-rose-500">
-                        Record
-                      </th>
-                      <th className="px-8 py-4 text-[10px] font-black uppercase tracking-[0.22em] text-rose-500">
-                        Win rate
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {players.map((player, index) => {
-                      const winRate = getWinRate(player);
+            <div className="space-y-4 p-6 md:p-8">
+              {players.map((player, index) => {
+                const winRate = getWinRate(player);
 
-                      return (
-                        <tr
-                          key={player.id}
-                          className="border-b border-rose-100/60 transition duration-200 hover:bg-rose-50/45"
-                        >
-                          <td className="px-8 py-5 text-lg font-black tracking-tight text-slate-300">
-                            #{String(index + 1).padStart(2, '0')}
-                          </td>
-                          <td className="px-8 py-5">
-                            <div className="flex items-center gap-4">
-                              <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-[1rem] border border-white bg-white text-sm font-black uppercase text-rose-600 shadow-sm">
-                                {player.profilePhoto ? (
-                                  <img
-                                    src={player.profilePhoto}
-                                    alt={player.username}
-                                    className="h-full w-full object-cover"
-                                  />
-                                ) : (
-                                  player.username.charAt(0).toUpperCase()
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="truncate text-sm font-black text-slate-900">
-                                  {player.displayName || player.username}
-                                </p>
-                                <p className="mt-1 truncate text-xs font-medium text-slate-400">
-                                  @{player.username}
-                                </p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-8 py-5">
-                            <EloBadge rating={player.eloRating} />
-                          </td>
-                          <td className="px-8 py-5">
-                            <div className="flex items-center gap-2 text-sm font-semibold text-slate-600">
-                              <span className="rounded-full bg-emerald-50 px-3 py-1 text-emerald-700">
-                                {player.wins}
-                              </span>
-                              <span className="rounded-full bg-rose-50 px-3 py-1 text-rose-700">
-                                {player.losses}
-                              </span>
-                              <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600">
-                                {player.draws}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-8 py-5">
-                            <div className="flex items-center gap-3">
-                              <div className="h-2 w-28 rounded-full bg-rose-100">
-                                <div
-                                  className="h-2 rounded-full bg-gradient-to-r from-rose-400 to-amber-400"
-                                  style={{ width: `${winRate}%` }}
-                                />
-                              </div>
-                              <span className="text-sm font-black text-slate-700">
-                                {winRate}%
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="space-y-4 p-6 md:hidden">
-                {players.map((player, index) => {
-                  const winRate = getWinRate(player);
-
-                  return (
-                    <article
-                      key={player.id}
-                      className="rounded-[1.75rem] border border-rose-100/80 bg-white/85 p-5 shadow-sm"
-                    >
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex items-center gap-4">
-                          <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-[1rem] border border-white bg-white text-lg font-black uppercase text-rose-600 shadow-sm">
-                            {player.profilePhoto ? (
-                              <img
-                                src={player.profilePhoto}
-                                alt={player.username}
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              player.username.charAt(0).toUpperCase()
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-sm font-black text-slate-900">
-                              {player.displayName || player.username}
-                            </p>
-                            <p className="mt-1 text-xs font-medium text-slate-400">
-                              @{player.username}
-                            </p>
-                          </div>
-                        </div>
-                        <span className="text-lg font-black tracking-tight text-slate-300">
+                return (
+                  <article
+                    key={player.id}
+                    className="rounded-[1.9rem] border border-rose-100/80 bg-white/88 p-5 shadow-sm"
+                  >
+                    <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="flex items-center gap-4">
+                        <span className="text-2xl font-black tracking-tight text-slate-300">
                           #{index + 1}
                         </span>
+                        <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[1.25rem] border border-white bg-white text-lg font-black uppercase text-rose-600 shadow-sm">
+                          {player.profilePhoto ? (
+                            <img
+                              src={player.profilePhoto}
+                              alt={player.username}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            player.username.charAt(0).toUpperCase()
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate text-lg font-black text-slate-900">
+                              {player.displayName || player.username}
+                            </p>
+                            {player.isOnline && (
+                              <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-emerald-700">
+                                Online
+                              </span>
+                            )}
+                            {player.canMessage && (
+                              <span className="rounded-full border border-rose-100 bg-rose-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-rose-600">
+                                Can message
+                              </span>
+                            )}
+                          </div>
+                          <p className="mt-1 truncate text-xs font-medium text-slate-400">
+                            @{player.username}
+                          </p>
+                          <p className="mt-2 text-sm text-slate-500">
+                            {player.country || 'Global community'} -{' '}
+                            {formatLastActive(player.lastActiveAt, player.isOnline)}
+                          </p>
+                        </div>
                       </div>
 
-                      <div className="mt-4">
-                        <EloBadge rating={player.eloRating} />
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-3 gap-3">
-                        <div className="rounded-[1.25rem] bg-emerald-50 p-3 text-center">
-                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">
-                            W
+                      <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[420px]">
+                        <div className="rounded-[1.35rem] border border-rose-100 bg-rose-50/60 p-4">
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                            Rating
                           </p>
-                          <p className="mt-2 text-lg font-black text-emerald-700">
-                            {player.wins}
+                          <div className="mt-2">
+                            <EloBadge rating={player.eloRating || 1200} />
+                          </div>
+                        </div>
+                        <div className="rounded-[1.35rem] border border-rose-100 bg-white p-4">
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                            Record
+                          </p>
+                          <p className="mt-2 text-sm font-semibold text-slate-700">
+                            {player.wins || 0}W / {player.losses || 0}L / {player.draws || 0}D
                           </p>
                         </div>
-                        <div className="rounded-[1.25rem] bg-rose-50 p-3 text-center">
-                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-700">
-                            L
+                        <div className="rounded-[1.35rem] border border-rose-100 bg-white p-4">
+                          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                            Win rate
                           </p>
-                          <p className="mt-2 text-lg font-black text-rose-700">
-                            {player.losses}
-                          </p>
-                        </div>
-                        <div className="rounded-[1.25rem] bg-slate-100 p-3 text-center">
-                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600">
-                            D
-                          </p>
-                          <p className="mt-2 text-lg font-black text-slate-700">
-                            {player.draws}
-                          </p>
+                          <p className="mt-2 text-sm font-semibold text-slate-700">{winRate}%</p>
                         </div>
                       </div>
-
-                      <div className="mt-4">
-                        <div className="flex items-center justify-between text-sm font-semibold text-slate-500">
-                          <span>Win rate</span>
-                          <span>{winRate}%</span>
-                        </div>
-                        <div className="mt-2 h-2 rounded-full bg-rose-100">
-                          <div
-                            className="h-2 rounded-full bg-gradient-to-r from-rose-400 to-amber-400"
-                            style={{ width: `${winRate}%` }}
-                          />
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           ) : (
             <div className="px-6 py-12 text-center md:px-8">
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-rose-500">
@@ -591,7 +323,7 @@ const LeaderboardPage: React.FC = () => {
               </h3>
               <p className="mx-auto mt-4 max-w-2xl text-base leading-8 text-slate-500">
                 As soon as completed matches are recorded, the leaderboard will
-                populate here with a full ranking table and podium view.
+                populate here with a full ranking table and discovery-friendly filters.
               </p>
             </div>
           )}

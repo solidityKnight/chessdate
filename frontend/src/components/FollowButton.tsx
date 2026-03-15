@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
-import { getAuthHeaders } from '../services/apiService';
+import api from '../services/apiService';
 
 interface FollowButtonProps {
   userId: string;
@@ -21,19 +20,32 @@ const FollowButton: React.FC<FollowButtonProps> = ({
   const [status, setStatus] = useState(initialStatus);
   const [loading, setLoading] = useState(false);
 
+  const updateStatus = (nextStatus: 'none' | 'pending' | 'accepted') => {
+    setStatus(nextStatus);
+    onStatusChange?.(nextStatus);
+  };
+
   const handleFollow = async () => {
     if (status !== 'none') return;
     setLoading(true);
     try {
-      await axios.post(
-        '/api/follow/request',
-        { followingId: userId },
-        { headers: getAuthHeaders() }
-      );
-      setStatus('pending');
-      onStatusChange?.('pending');
-    } catch (error) {
+      await api.post('/follow/request', { followingId: userId });
+      updateStatus('pending');
+    } catch (error: unknown) {
       console.error('Follow error:', error);
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error &&
+        typeof error.response === 'object' &&
+        error.response !== null &&
+        'data' in error.response &&
+        typeof error.response.data === 'object' &&
+        error.response.data !== null &&
+        'message' in error.response.data
+      ) {
+        window.alert(String(error.response.data.message));
+      }
     } finally {
       setLoading(false);
     }
@@ -42,10 +54,11 @@ const FollowButton: React.FC<FollowButtonProps> = ({
   if (status === 'accepted') {
     return (
       <button
+        type="button"
         disabled
         className={`${baseClassName} border-emerald-200 bg-emerald-50 text-emerald-700 ${className}`}
       >
-        Friends
+        Connected
       </button>
     );
   }
@@ -53,6 +66,7 @@ const FollowButton: React.FC<FollowButtonProps> = ({
   if (status === 'pending') {
     return (
       <button
+        type="button"
         disabled
         className={`${baseClassName} border-slate-200 bg-slate-100 text-slate-500 ${className}`}
       >
@@ -63,6 +77,7 @@ const FollowButton: React.FC<FollowButtonProps> = ({
 
   return (
     <button
+      type="button"
       onClick={handleFollow}
       disabled={loading}
       className={`${baseClassName} border-rose-500 bg-rose-500 text-white shadow-[0_16px_36px_-18px_rgba(225,29,72,0.8)] hover:-translate-y-0.5 hover:bg-rose-600 disabled:opacity-60 ${className}`}

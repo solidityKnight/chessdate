@@ -1,6 +1,7 @@
 const { User } = require('../models');
 const jwt = require('jsonwebtoken');
 const { validationResult } = require('express-validator');
+const { sanitizeUser } = require('../utils/userPresentation');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET || 'secret_key', {
@@ -34,8 +35,11 @@ exports.register = async (req, res) => {
       gender
     });
 
+    user.lastActiveAt = new Date();
+    await user.save();
+
     res.status(201).json({
-      ...user.toJSON(),
+      ...sanitizeUser(user),
       token: generateToken(user.id)
     });
   } catch (error) {
@@ -51,8 +55,11 @@ exports.login = async (req, res) => {
     const user = await User.findOne({ where: { email } });
 
     if (user && (await user.comparePassword(password))) {
+      user.lastActiveAt = new Date();
+      await user.save();
+
       res.json({
-        ...user.toJSON(),
+        ...sanitizeUser(user),
         token: generateToken(user.id)
       });
     } else {
@@ -70,7 +77,7 @@ exports.getMe = async (req, res) => {
       attributes: { exclude: ['password'] }
     });
     if (user) {
-      res.json(user);
+      res.json(sanitizeUser(user));
     } else {
       res.status(404).json({ message: 'User not found' });
     }

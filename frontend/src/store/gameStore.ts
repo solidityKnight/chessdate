@@ -27,6 +27,16 @@ export interface ChatMessage {
   timestamp:   number;
 }
 
+export interface PlayerPreview {
+  id: string;
+  username: string;
+  displayName?: string;
+  profilePhoto?: string;
+  country?: string;
+  isProfilePhotoVerified?: boolean;
+  lastActiveAt?: string;
+}
+
 export interface CurrentGame {
   gameId:        string;
   playerColor:   'white' | 'black';
@@ -41,6 +51,11 @@ export interface CurrentGame {
   whiteTime?:    number;
   blackTime?:    number;
   lastMoveAt?:   number;
+  opponentProfile?: PlayerPreview | null;
+  playerProfiles?: {
+    white?: PlayerPreview | null;
+    black?: PlayerPreview | null;
+  };
 }
 
 export interface User {
@@ -57,12 +72,17 @@ export interface User {
   bio?: string;
   interests?: string[];
   profilePhoto?: string;
+  isProfilePhotoVerified?: boolean;
   latitude?: number;
   longitude?: number;
   city?: string;
   country?: string;
   preferredMatchDistance?: number;
+  matchPreferences?: Array<'male' | 'female'>;
   learnMode?: boolean;
+  lastActiveAt?: string;
+  profileCompletion?: number;
+  isOnline?: boolean;
   eloRating: number;
   gamesPlayed: number;
   wins: number;
@@ -83,7 +103,7 @@ interface GameStore {
   user:           User | null;
   token:          string | null;
   isInQueue:      boolean;
-  selectedGender: 'male' | 'female' | null;
+  selectedGender: 'male' | 'female' | 'any' | null;
   queueStats:     { male: number; female: number; total: number } | null;
   currentGame:    CurrentGame | null;
   chatMessages:   ChatMessage[];
@@ -91,15 +111,17 @@ interface GameStore {
   error:          string | null;
   rematchStatus:  'none' | 'requested' | 'received' | 'declined';
   isAuthLoading:  boolean;
+  unreadFriendMessages: number;
 
   setUser:           (user: User | null) => void;
   setToken:          (token: string | null) => void;
   setInQueue:        (inQueue: boolean) => void;
-  setSelectedGender: (gender: 'male' | 'female' | null) => void;
+  setSelectedGender: (gender: 'male' | 'female' | 'any' | null) => void;
   setQueueStats:     (stats: { male: number; female: number; total: number } | null) => void;
   setCurrentGame:    (game: CurrentGame | null) => void;
   setRematchStatus:  (status: 'none' | 'requested' | 'received' | 'declined') => void;
   setAuthLoading:    (isLoading: boolean) => void;
+  setUnreadFriendMessages: (count: number) => void;
   updateBoard:    (board: string, move?: MoveRecord, gameStatus?: GameStatus, timeUpdate?: { whiteTime?: number, blackTime?: number, lastMoveAt?: number }) => void;
   setGameStatus:  (status: 'waiting' | 'active' | 'finished', winner?: 'white' | 'black', result?: string) => void;
   addChatMessage: (message: ChatMessage) => void;
@@ -112,7 +134,7 @@ interface GameStore {
 
 const initialState: Pick<
   GameStore,
-  'user' | 'token' | 'isInQueue' | 'selectedGender' | 'queueStats' | 'currentGame' | 'chatMessages' | 'isConnected' | 'error' | 'rematchStatus' | 'isAuthLoading'
+  'user' | 'token' | 'isInQueue' | 'selectedGender' | 'queueStats' | 'currentGame' | 'chatMessages' | 'isConnected' | 'error' | 'rematchStatus' | 'isAuthLoading' | 'unreadFriendMessages'
 > = {
   user:           null,
   token:          tokenStorage.get(),
@@ -125,6 +147,7 @@ const initialState: Pick<
   error:          null,
   rematchStatus:  'none',
   isAuthLoading:  !!tokenStorage.get(),
+  unreadFriendMessages: 0,
 };
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -146,6 +169,7 @@ export const useGameStore = create<GameStore>()(
         setCurrentGame:    (currentGame)    => set({ currentGame }),
         setRematchStatus:  (rematchStatus)  => set({ rematchStatus }),
         setAuthLoading:    (isAuthLoading)  => set({ isAuthLoading }),
+        setUnreadFriendMessages: (unreadFriendMessages) => set({ unreadFriendMessages }),
 
         updateBoard: (board, move, gameStatus, timeUpdate) =>
           set((state) => {
@@ -178,11 +202,12 @@ export const useGameStore = create<GameStore>()(
           isConnected: state.isConnected, // Preserve connection state
           user: state.user, // Preserve user state
           token: state.token, // Preserve token state
+          unreadFriendMessages: state.unreadFriendMessages,
           isAuthLoading: !!state.token && !state.user,
         })),
       }),
       {
-        name: 'game-store-v3',
+        name: 'game-store-v4',
         storage: createJSONStorage(() => sessionStorage),
         partialize: (state) => ({ 
           user: state.user, 

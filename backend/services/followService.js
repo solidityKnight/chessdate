@@ -1,14 +1,7 @@
 const { Op } = require('sequelize');
 const { Follow, User } = require('../models');
-
-const publicUserAttributes = [
-  'id',
-  'username',
-  'displayName',
-  'profilePhoto',
-  'eloRating',
-  'country',
-];
+const safetyService = require('./safetyService');
+const { publicUserAttributes } = require('../utils/userPresentation');
 
 class FollowService {
   /**
@@ -20,6 +13,10 @@ class FollowService {
   async requestFollow(followerId, followingId) {
     if (followerId === followingId) {
       throw new Error('You cannot follow yourself');
+    }
+
+    if (await safetyService.areUsersBlocked(followerId, followingId)) {
+      throw new Error('You cannot follow this player');
     }
 
     // Check if follow already exists
@@ -47,6 +44,10 @@ class FollowService {
    * @returns {Object} Updated follow object
    */
   async acceptFollow(followerId, followingId) {
+    if (await safetyService.areUsersBlocked(followerId, followingId)) {
+      throw new Error('You cannot accept this follow request');
+    }
+
     const follow = await Follow.findOne({
       where: { followerId, followingId, status: 'pending' }
     });
@@ -68,27 +69,45 @@ class FollowService {
    * @returns {Array} List of users
    */
   async listFollows(userId, type) {
+    const blockedIds = await safetyService.getActionTargetIds(userId, 'block');
+
     if (type === 'followers') {
       const followers = await Follow.findAll({
-        where: { followingId: userId, status: 'accepted' },
+        where: {
+          followingId: userId,
+          status: 'accepted',
+          ...(blockedIds.length > 0 ? { followerId: { [Op.notIn]: blockedIds } } : {}),
+        },
         include: [{ model: User, as: 'follower', attributes: publicUserAttributes }]
       });
       return followers.map(f => f.follower);
     } else if (type === 'following') {
       const following = await Follow.findAll({
-        where: { followerId: userId, status: 'accepted' },
+        where: {
+          followerId: userId,
+          status: 'accepted',
+          ...(blockedIds.length > 0 ? { followingId: { [Op.notIn]: blockedIds } } : {}),
+        },
         include: [{ model: User, as: 'followed', attributes: publicUserAttributes }]
       });
       return following.map(f => f.followed);
     } else if (type === 'pending_followers') {
       const pendingFollowers = await Follow.findAll({
-        where: { followingId: userId, status: 'pending' },
+        where: {
+          followingId: userId,
+          status: 'pending',
+          ...(blockedIds.length > 0 ? { followerId: { [Op.notIn]: blockedIds } } : {}),
+        },
         include: [{ model: User, as: 'follower', attributes: publicUserAttributes }]
       });
       return pendingFollowers.map(f => f.follower);
     } else if (type === 'pending_following') {
       const pendingFollowing = await Follow.findAll({
-        where: { followerId: userId, status: 'pending' },
+        where: {
+          followerId: userId,
+          status: 'pending',
+          ...(blockedIds.length > 0 ? { followingId: { [Op.notIn]: blockedIds } } : {}),
+        },
         include: [{ model: User, as: 'followed', attributes: publicUserAttributes }]
       });
       return pendingFollowing.map(f => f.followed);
@@ -98,6 +117,7 @@ class FollowService {
 
   async canUsersMessage(userId, otherUserId) {
     if (!userId || !otherUserId) return false;
+    if (await safetyService.areUsersBlocked(userId, otherUserId)) return false;
 
     const follow = await Follow.findOne({
       where: {
@@ -109,6 +129,54 @@ class FollowService {
     });
 
     return Boolean(follow);
+  }
+
+  async getConversationCandidates(userId) {
+    const [followers, following, pendingFollowers, pendingFollowing] = await Promise.all([
+      this.listFollows(userId, 'followers'),
+      this.listFollows(userId, 'following'),
+      this.listFollows(userId, 'pending_followers'),
+      this.listFollows(userId, 'pending_following'),
+    ]);
+
+    const map = new Map();
+    [...followers, ...following, ...pendingFollowers, ...pendingFollowing].forEach((user) => {
+      if (user) {
+        map.set(String(user.id), user);
+      }
+    });
+
+    return Array.from(map.values());
+  }
+
+  async getMutualFollowIds(userId, targetIds = []) {
+    if (!userId || targetIds.length === 0) return new Set();
+
+    const [following, followers] = await Promise.all([
+      Follow.findAll({
+        where: {
+          followerId: userId,
+          followingId: targetIds,
+          status: 'accepted',
+        },
+        attributes: ['followingId'],
+      }),
+      Follow.findAll({
+        where: {
+          followerId: targetIds,
+          followingId: userId,
+          status: 'accepted',
+        },
+        attributes: ['followerId'],
+      }),
+    ]);
+
+    const followingIds = new Set(following.map((entry) => String(entry.followingId)));
+    return new Set(
+      followers
+        .map((entry) => String(entry.followerId))
+        .filter((targetId) => followingIds.has(targetId))
+    );
   }
 }
 
