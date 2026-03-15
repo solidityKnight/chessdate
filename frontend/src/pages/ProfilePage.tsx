@@ -15,6 +15,15 @@ interface Game {
   createdAt: string;
 }
 
+interface ConnectionUser {
+  id: string;
+  username: string;
+  displayName?: string;
+  profilePhoto?: string;
+  eloRating?: number;
+  country?: string;
+}
+
 interface EditProfileForm {
   displayName: string;
   age: string | number;
@@ -47,13 +56,49 @@ const formatGameDate = (value: string) =>
     year: 'numeric',
   });
 
+const connectionTabs = [
+  {
+    key: 'followers',
+    label: 'Followers',
+    emptyTitle: 'No followers yet',
+    emptyDescription: 'Players who follow you will show up here.',
+  },
+  {
+    key: 'following',
+    label: 'Following',
+    emptyTitle: 'Not following anyone yet',
+    emptyDescription: 'Follow someone from Find Players to keep track of them here.',
+  },
+  {
+    key: 'pending_followers',
+    label: 'Requests',
+    emptyTitle: 'No pending follower requests',
+    emptyDescription: 'New follower requests will appear here.',
+  },
+  {
+    key: 'pending_following',
+    label: 'Outgoing',
+    emptyTitle: 'No outgoing requests',
+    emptyDescription: 'Pending players you followed will appear here.',
+  },
+] as const;
+
+type ConnectionsTab = (typeof connectionTabs)[number]['key'];
+
 const ProfilePage: React.FC = () => {
   const { user, setUser, setToken } = useGameStore();
   const [recentGames, setRecentGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<EditProfileForm>(buildEditData());
+  const [followers, setFollowers] = useState<ConnectionUser[]>([]);
+  const [following, setFollowing] = useState<ConnectionUser[]>([]);
+  const [pendingFollowers, setPendingFollowers] = useState<ConnectionUser[]>([]);
+  const [pendingFollowing, setPendingFollowing] = useState<ConnectionUser[]>([]);
+  const [activeConnectionsTab, setActiveConnectionsTab] =
+    useState<ConnectionsTab>('followers');
   const hasFetched = useRef(false);
+  const connectionsRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -62,10 +107,27 @@ const ProfilePage: React.FC = () => {
 
     const fetchProfile = async () => {
       try {
-        const response = await api.get('/user/profile');
-        setRecentGames(response.data.recentGames);
-        setEditData(buildEditData(response.data.user));
-        setUser(response.data.user);
+        const [
+          profileRes,
+          followersRes,
+          followingRes,
+          pendingFollowersRes,
+          pendingFollowingRes,
+        ] = await Promise.all([
+          api.get('/user/profile'),
+          api.get('/follow/list?type=followers'),
+          api.get('/follow/list?type=following'),
+          api.get('/follow/list?type=pending_followers'),
+          api.get('/follow/list?type=pending_following'),
+        ]);
+
+        setRecentGames(profileRes.data.recentGames);
+        setEditData(buildEditData(profileRes.data.user));
+        setUser(profileRes.data.user);
+        setFollowers(followersRes.data);
+        setFollowing(followingRes.data);
+        setPendingFollowers(pendingFollowersRes.data);
+        setPendingFollowing(pendingFollowingRes.data);
       } catch (err) {
         console.error('Failed to fetch profile', err);
       } finally {
@@ -94,6 +156,31 @@ const ProfilePage: React.FC = () => {
       setIsEditing(false);
     } catch (err) {
       console.error('Failed to update profile', err);
+    }
+  };
+
+  const handleOpenConnections = (tab: ConnectionsTab) => {
+    setActiveConnectionsTab(tab);
+    window.requestAnimationFrame(() => {
+      connectionsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
+  const handleOpenMessages = (contactId?: string) => {
+    navigate(contactId ? `/friends?contact=${contactId}` : '/friends');
+  };
+
+  const handleAcceptFollower = async (followerId: string) => {
+    try {
+      await api.post('/follow/accept', { followerId });
+      setPendingFollowers((prev) => prev.filter((user) => user.id !== followerId));
+      const acceptedUser = pendingFollowers.find((user) => user.id === followerId);
+      if (acceptedUser) {
+        setFollowers((prev) => [acceptedUser, ...prev]);
+      }
+      setActiveConnectionsTab('followers');
+    } catch (err) {
+      console.error('Failed to accept follow', err);
     }
   };
 
@@ -127,6 +214,24 @@ const ProfilePage: React.FC = () => {
     { label: 'Current streak', value: user.winStreak || 0, tone: 'text-rose-500' },
     { label: 'Achievements', value: achievementCount, tone: 'text-amber-600' },
   ];
+  const connectionsByTab: Record<ConnectionsTab, ConnectionUser[]> = {
+    followers,
+    following,
+    pending_followers: pendingFollowers,
+    pending_following: pendingFollowing,
+  };
+  const activeConnections = connectionsByTab[activeConnectionsTab];
+  const messageReadyCount = new Set(
+    [...followers, ...following, ...pendingFollowers, ...pendingFollowing].map(
+      (userItem) => userItem.id
+    )
+  ).size;
+  const connectionTabMeta = {
+    followers: { badge: 'Follows you', tone: 'text-amber-600' },
+    following: { badge: 'You follow', tone: 'text-slate-600' },
+    pending_followers: { badge: 'Requested', tone: 'text-rose-500' },
+    pending_following: { badge: 'Pending', tone: 'text-sky-600' },
+  } as const;
 
   return (
     <RomanticLayout>
@@ -211,6 +316,72 @@ const ProfilePage: React.FC = () => {
                   </div>
                 ))}
               </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <button
+                  type="button"
+                  onClick={() => handleOpenConnections('followers')}
+                  className="page-stat-card rounded-[1.75rem] p-4 text-left transition duration-300 hover:-translate-y-1 hover:border-rose-200"
+                >
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+                    Followers
+                  </p>
+                  <p className="mt-3 text-2xl font-black text-slate-900">
+                    {followers.length}
+                  </p>
+                  <p className="mt-2 text-sm font-medium text-slate-500">
+                    See who can message you
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenConnections('following')}
+                  className="page-stat-card rounded-[1.75rem] p-4 text-left transition duration-300 hover:-translate-y-1 hover:border-rose-200"
+                >
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+                    Following
+                  </p>
+                  <p className="mt-3 text-2xl font-black text-slate-900">
+                    {following.length}
+                  </p>
+                  <p className="mt-2 text-sm font-medium text-slate-500">
+                    Open players you follow
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenConnections('pending_followers')}
+                  className="page-stat-card rounded-[1.75rem] p-4 text-left transition duration-300 hover:-translate-y-1 hover:border-rose-200"
+                >
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+                    Requests
+                  </p>
+                  <p className="mt-3 text-2xl font-black text-slate-900">
+                    {pendingFollowers.length}
+                  </p>
+                  <p className="mt-2 text-sm font-medium text-slate-500">
+                    Review new follower requests
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenMessages()}
+                  className="page-stat-card rounded-[1.75rem] p-4 text-left transition duration-300 hover:-translate-y-1 hover:border-rose-200"
+                >
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+                    Messages
+                  </p>
+                  <p className="mt-3 text-2xl font-black text-slate-900">
+                    {messageReadyCount}
+                  </p>
+                  <p className="mt-2 text-sm font-medium text-slate-500">
+                    Jump straight to your inbox
+                  </p>
+                </button>
+              </div>
             </div>
 
             <div className="page-dark-card rounded-[2.45rem] p-6 text-white">
@@ -284,6 +455,23 @@ const ProfilePage: React.FC = () => {
                       </button>
                     </div>
                   )}
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenConnections('followers')}
+                      className="w-full rounded-[1.35rem] border border-white/12 bg-white/6 px-5 py-3 text-sm font-semibold text-white transition hover:border-rose-200/30 hover:bg-white/10"
+                    >
+                      View followers
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenMessages()}
+                      className="w-full rounded-[1.35rem] border border-rose-200/35 bg-rose-400/12 px-5 py-3 text-sm font-semibold text-rose-100 transition hover:bg-rose-400/18"
+                    >
+                      Open messages
+                    </button>
+                  </div>
 
                   <button
                     type="button"
@@ -496,6 +684,127 @@ const ProfilePage: React.FC = () => {
                       <p className="mt-2 text-lg font-black text-slate-900">
                         {user.learnMode ? 'Learning mode' : 'Standard mode'}
                       </p>
+                    </div>
+                  </div>
+
+                  <div
+                    ref={connectionsRef}
+                    className="rounded-[2rem] border border-rose-100/80 bg-gradient-to-br from-white via-rose-50/55 to-amber-50/70 p-6 shadow-sm"
+                  >
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-500">
+                          Connections
+                        </p>
+                        <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-900">
+                          Followers, requests, and messages
+                        </h3>
+                        <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-500">
+                          Anyone who follows you can open a message thread. Pick
+                          a player below to jump into the inbox.
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleOpenMessages()}
+                        className="rounded-full border border-rose-200 bg-white px-4 py-2 text-sm font-semibold text-rose-500 shadow-sm transition hover:border-rose-300 hover:bg-rose-50"
+                      >
+                        Open inbox
+                      </button>
+                    </div>
+
+                    <div className="mt-5 flex flex-wrap gap-2">
+                      {connectionTabs.map((tab) => (
+                        <button
+                          key={tab.key}
+                          type="button"
+                          onClick={() => setActiveConnectionsTab(tab.key)}
+                          className={`rounded-full border px-4 py-2 text-[11px] font-black uppercase tracking-[0.18em] transition ${
+                            activeConnectionsTab === tab.key
+                              ? 'border-rose-200 bg-rose-500 text-white shadow-[0_18px_36px_-24px_rgba(190,24,93,0.6)]'
+                              : 'border-rose-100 bg-white text-slate-500 hover:border-rose-200 hover:text-rose-500'
+                          }`}
+                        >
+                          {tab.label} ({connectionsByTab[tab.key].length})
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="mt-6 space-y-3">
+                      {activeConnections.length > 0 ? (
+                        activeConnections.map((connection) => (
+                          <div
+                            key={`${activeConnectionsTab}-${connection.id}`}
+                            className="rounded-[1.6rem] border border-rose-100/80 bg-white/88 p-4 shadow-sm"
+                          >
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                              <div className="flex min-w-0 items-center gap-4">
+                                <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-[1.15rem] border border-white bg-gradient-to-br from-rose-100 via-white to-amber-50 font-black uppercase text-rose-500 shadow-sm">
+                                  {connection.profilePhoto ? (
+                                    <img
+                                      src={connection.profilePhoto}
+                                      alt={connection.username}
+                                      className="h-full w-full object-cover"
+                                    />
+                                  ) : (
+                                    connection.username.charAt(0).toUpperCase()
+                                  )}
+                                </div>
+
+                                <div className="min-w-0">
+                                  <p className="truncate text-base font-black text-slate-900">
+                                    {connection.displayName || connection.username}
+                                  </p>
+                                  <p className="mt-1 truncate text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                    @{connection.username}
+                                  </p>
+                                  <p className="mt-2 text-sm text-slate-500">
+                                    Elo {connection.eloRating || 1200}
+                                    {connection.country ? ` - ${connection.country}` : ''}
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                                <span
+                                  className={`rounded-full border border-rose-100 bg-white px-3 py-1 text-[10px] font-black uppercase tracking-[0.18em] ${connectionTabMeta[activeConnectionsTab].tone}`}
+                                >
+                                  {connectionTabMeta[activeConnectionsTab].badge}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenMessages(connection.id)}
+                                  className="rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-sm font-semibold text-rose-500 transition hover:border-rose-300 hover:bg-rose-100"
+                                >
+                                  Message
+                                </button>
+                                {activeConnectionsTab === 'pending_followers' && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAcceptFollower(connection.id)}
+                                    className="rounded-full border border-rose-500 bg-rose-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-rose-600"
+                                  >
+                                    Accept
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="rounded-[1.6rem] border border-dashed border-rose-200 bg-white/72 p-5">
+                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-500">
+                            {connectionTabs.find((tab) => tab.key === activeConnectionsTab)?.emptyTitle}
+                          </p>
+                          <p className="mt-3 text-sm leading-7 text-slate-500">
+                            {
+                              connectionTabs.find((tab) => tab.key === activeConnectionsTab)
+                                ?.emptyDescription
+                            }
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

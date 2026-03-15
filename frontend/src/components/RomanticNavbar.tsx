@@ -15,6 +15,7 @@ const RomanticNavbar: React.FC<RomanticNavbarProps> = ({ showAuthButton = true }
     { label: 'PLAY', path: '/play' },
     { label: 'LEADERBOARD', path: '/leaderboard' },
     { label: 'FIND PLAYERS', path: '/find' },
+    { label: 'MESSAGES', path: '/friends' },
     { label: 'CONTACT', path: '/contact' },
   ];
 

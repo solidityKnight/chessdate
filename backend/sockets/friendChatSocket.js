@@ -1,25 +1,23 @@
-const { Message, User, Follow } = require('../models');
 const { Op } = require('sequelize');
+const { Message } = require('../models');
+const followService = require('../services/followService');
 
 function friendChatSocket(socket, io) {
   // Join a private chat room with a friend
   socket.on('join_friend_chat', async (data) => {
     try {
+      if (!socket.user) {
+        socket.emit('error', { message: 'Please log in to use messages' });
+        return;
+      }
+
       const { friendId } = data;
       const userId = socket.user.id;
 
-      // Check if they are friends (following each other and accepted)
-      const isFriend = await Follow.findOne({
-        where: {
-          [Op.or]: [
-            { followerId: userId, followingId: friendId, status: 'accepted' },
-            { followerId: friendId, followingId: userId, status: 'accepted' }
-          ]
-        }
-      });
+      const canMessage = await followService.canUsersMessage(userId, friendId);
 
-      if (!isFriend) {
-        socket.emit('error', { message: 'You are not friends with this user' });
+      if (!canMessage) {
+        socket.emit('error', { message: 'Follow this player to unlock messages' });
         return;
       }
 
@@ -49,16 +47,29 @@ function friendChatSocket(socket, io) {
   // Send a message to a friend
   socket.on('send_friend_message', async (data) => {
     try {
+      if (!socket.user) {
+        socket.emit('error', { message: 'Please log in to use messages' });
+        return;
+      }
+
       const { friendId, content } = data;
       const userId = socket.user.id;
+      const trimmedContent = content?.trim();
 
-      if (!content || content.trim().length === 0) return;
+      if (!trimmedContent) return;
+
+      const canMessage = await followService.canUsersMessage(userId, friendId);
+
+      if (!canMessage) {
+        socket.emit('error', { message: 'Follow this player to unlock messages' });
+        return;
+      }
 
       // Save to DB
       const message = await Message.create({
         senderId: userId,
         receiverId: friendId,
-        content: content.trim()
+        content: trimmedContent
       });
 
       // Emit to room

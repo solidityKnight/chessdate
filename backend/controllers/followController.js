@@ -29,7 +29,7 @@ exports.acceptFollow = async (req, res) => {
 exports.listFollows = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { type } = req.query; // 'followers', 'following', 'pending_followers'
+    const { type } = req.query; // 'followers', 'following', 'pending_followers', 'pending_following'
 
     const users = await followService.listFollows(userId, type);
     res.json(users);

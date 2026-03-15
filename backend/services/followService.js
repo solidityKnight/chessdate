@@ -1,4 +1,14 @@
+const { Op } = require('sequelize');
 const { Follow, User } = require('../models');
+
+const publicUserAttributes = [
+  'id',
+  'username',
+  'displayName',
+  'profilePhoto',
+  'eloRating',
+  'country',
+];
 
 class FollowService {
   /**
@@ -61,23 +71,44 @@ class FollowService {
     if (type === 'followers') {
       const followers = await Follow.findAll({
         where: { followingId: userId, status: 'accepted' },
-        include: [{ model: User, as: 'follower' }]
+        include: [{ model: User, as: 'follower', attributes: publicUserAttributes }]
       });
       return followers.map(f => f.follower);
     } else if (type === 'following') {
       const following = await Follow.findAll({
         where: { followerId: userId, status: 'accepted' },
-        include: [{ model: User, as: 'followed' }]
+        include: [{ model: User, as: 'followed', attributes: publicUserAttributes }]
       });
       return following.map(f => f.followed);
     } else if (type === 'pending_followers') {
       const pendingFollowers = await Follow.findAll({
         where: { followingId: userId, status: 'pending' },
-        include: [{ model: User, as: 'follower' }]
+        include: [{ model: User, as: 'follower', attributes: publicUserAttributes }]
       });
       return pendingFollowers.map(f => f.follower);
+    } else if (type === 'pending_following') {
+      const pendingFollowing = await Follow.findAll({
+        where: { followerId: userId, status: 'pending' },
+        include: [{ model: User, as: 'followed', attributes: publicUserAttributes }]
+      });
+      return pendingFollowing.map(f => f.followed);
     }
     return [];
+  }
+
+  async canUsersMessage(userId, otherUserId) {
+    if (!userId || !otherUserId) return false;
+
+    const follow = await Follow.findOne({
+      where: {
+        [Op.or]: [
+          { followerId: userId, followingId: otherUserId },
+          { followerId: otherUserId, followingId: userId }
+        ]
+      }
+    });
+
+    return Boolean(follow);
   }
 }
 
