@@ -13,7 +13,6 @@ import FindPlayerPage from './pages/FindPlayerPage';
 import FriendsPage from './pages/FriendsPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import ContactPage from './pages/ContactPage';
-import CareersPage from './pages/CareersPage';
 import AdminDashboard from './pages/AdminDashboard';
 import AchievementPopup from './components/AchievementPopup';
 import PopunderAd from './components/PopunderAd';
@@ -97,7 +96,6 @@ function App() {
             <Route path="/friends" element={token ? <FriendsPage /> : <Navigate to="/login" />} />
             <Route path="/leaderboard" element={token ? <LeaderboardPage /> : <Navigate to="/login" />} />
             <Route path="/contact" element={<ContactPage />} />
-            <Route path="/careers" element={<CareersPage />} />
             <Route 
               path="/admin" 
               element={user?.role === 'admin' ? <AdminDashboard /> : <Navigate to="/" />} 

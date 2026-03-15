@@ -22,7 +22,6 @@ const RomanticNavbar: React.FC<RomanticNavbarProps> = ({ showAuthButton = true }
         <a href="/leaderboard" onClick={(e) => { e.preventDefault(); navigate('/leaderboard'); }}>LEADERBOARD</a>
         <a href="/find" onClick={(e) => { e.preventDefault(); navigate('/find'); }}>FIND PLAYERS</a>
         <a href="/contact" onClick={(e) => { e.preventDefault(); navigate('/contact'); }}>CONTACT</a>
-        <a href="/careers" onClick={(e) => { e.preventDefault(); navigate('/careers'); }}>CAREERS</a>
       </nav>
       {showAuthButton && (
         token ? (

@@ -107,8 +107,8 @@ const ProfilePage: React.FC = () => {
     <RomanticLayout>
       <div className="max-w-6xl mx-auto px-4 py-12 animate-fade-in">
         {/* Profile Card */}
-        <div className="bg-white/80 backdrop-blur-xl rounded-[3rem] shadow-2xl border border-pink-100 overflow-hidden relative group">
-          <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-r from-pink-400 to-rose-500 opacity-10 group-hover:opacity-20 transition-opacity duration-700" />
+        <div className="bg-white/90 backdrop-blur-2xl rounded-[3.5rem] shadow-[0_50px_100px_-30px_rgba(244,114,182,0.3)] border border-pink-100/50 overflow-hidden relative group transition-all duration-500 hover:shadow-[0_60px_120px_-40px_rgba(244,114,182,0.4)]">
+          <div className="absolute top-0 left-0 w-full h-48 bg-gradient-to-br from-pink-400/20 via-rose-500/10 to-transparent group-hover:opacity-30 transition-opacity duration-700" />
 
           <div className="relative p-8 md:p-12">
             {/* Header Section */}
@@ -116,16 +116,16 @@ const ProfilePage: React.FC = () => {
               <div className="flex flex-col md:flex-row items-center md:items-end gap-8">
                 <div className="relative group/avatar">
                   <div className="absolute inset-0 bg-pink-400 blur-2xl rounded-full opacity-20 group-hover/avatar:opacity-40 transition-opacity" />
-                  <div className="relative w-40 h-40 rounded-[2.5rem] bg-gradient-to-br from-pink-100 to-rose-100 p-1 shadow-2xl transform rotate-3 group-hover/avatar:rotate-0 transition-transform duration-500">
-                    <div className="w-full h-full rounded-[2.3rem] overflow-hidden border-4 border-white bg-white flex items-center justify-center">
+                  <div className="relative w-44 h-44 rounded-[3rem] bg-gradient-to-br from-pink-200 via-rose-300 to-pink-100 p-1 shadow-2xl transform rotate-2 group-hover/avatar:rotate-0 transition-all duration-700 group-hover/avatar:scale-105">
+                    <div className="w-full h-full rounded-[2.8rem] overflow-hidden border-8 border-white bg-white flex items-center justify-center shadow-inner">
                       {user.profilePhoto ? (
                         <img
                           src={user.profilePhoto}
                           alt={user.username}
-                          className="w-full h-full object-cover transition-transform duration-700 group-hover/avatar:scale-110"
+                          className="w-full h-full object-cover transition-transform duration-1000 group-hover/avatar:scale-110"
                         />
                       ) : (
-                        <span className="text-6xl font-black text-pink-300 uppercase">
+                        <span className="text-7xl font-black text-pink-200 uppercase tracking-tighter">
                           {user.username?.[0]}
                         </span>
                       )}
@@ -400,17 +400,17 @@ const ProfilePage: React.FC = () => {
                     </div>
 
                     {/* FIX 3: Removed gap-2 and items-center — gaps break the bar so widths no longer sum to 100%. */}
-                    <div className="flex h-2 rounded-full bg-white/5 overflow-hidden">
+                    <div className="flex h-3 rounded-full bg-slate-100/50 overflow-hidden p-0.5 border border-pink-50">
                       <div
-                        className="h-full bg-green-400 transition-all duration-1000"
+                        className="h-full bg-gradient-to-r from-green-400 to-emerald-500 rounded-full transition-all duration-1000 shadow-[0_0_12px_rgba(52,211,153,0.4)]"
                         style={{ width: `${(user.wins / (user.gamesPlayed || 1)) * 100}%` }}
                       />
                       <div
-                        className="h-full bg-blue-400 transition-all duration-1000"
+                        className="h-full bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full transition-all duration-1000 mx-0.5 shadow-[0_0_12px_rgba(96,165,250,0.4)]"
                         style={{ width: `${(user.draws / (user.gamesPlayed || 1)) * 100}%` }}
                       />
                       <div
-                        className="h-full bg-red-400 transition-all duration-1000"
+                        className="h-full bg-gradient-to-r from-red-400 to-rose-500 rounded-full transition-all duration-1000 shadow-[0_0_12px_rgba(248,113,113,0.4)]"
                         style={{ width: `${(user.losses / (user.gamesPlayed || 1)) * 100}%` }}
                       />
                     </div>
