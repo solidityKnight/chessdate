@@ -84,7 +84,7 @@ class BotMessageGenerator {
 
   /**
    * Called when the human player sends a chat message.
-   * Decides whether to reply or ignore.
+   * Always responds with personality-based engagement.
    */
   async onPlayerMessage(gameId, io, playerMessage) {
     const session = this.sessions.get(gameId);
@@ -94,11 +94,8 @@ class BotMessageGenerator {
     session.chatHistory.push({ role: 'user', message: playerMessage });
     if (session.chatHistory.length > 10) session.chatHistory.shift();
 
-    // 30% chance to ignore (lowered from 40% for better engagement)
-    if (Math.random() < 0.30) {
-      console.log(`💬 Bot ignoring message in game ${gameId}`);
-      return;
-    }
+    // Analyze the opponent's message for tone and content
+    const messageAnalysis = personalityEngine.analyzeMessage(playerMessage);
 
     // Check if player is asking for instagram
     const lower = playerMessage.toLowerCase();
@@ -125,9 +122,10 @@ class BotMessageGenerator {
       const messageContext = (i === 0) ? context : 'follow_up';
 
       this._scheduleWithTyping(gameId, io, accumulatedDelay, async () => {
-        await this._sendBotMessage(gameId, io, messageContext, { 
+        await this._sendBotMessage(gameId, io, messageContext, {
           lastPlayerMessage: playerMessage,
-          isFollowUp: i > 0
+          isFollowUp: i > 0,
+          messageAnalysis
         });
       });
     }
@@ -204,7 +202,7 @@ class BotMessageGenerator {
       ? chessBotEngine.getGameStatus(extra.fen, session.botColor)
       : 'equal';
 
-    // Build AI prompt
+    // Build AI prompt with message analysis
     const prompt = personalityEngine.buildPrompt({
       personality: session.personality,
       botGender: session.botGender,
@@ -217,6 +215,7 @@ class BotMessageGenerator {
       context,
       isFollowUp: extra.isFollowUp || false,
       chatHistory: session.chatHistory,
+      messageAnalysis: extra.messageAnalysis || null,
     });
 
     // Get AI response (or fallback)
