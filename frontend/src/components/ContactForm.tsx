@@ -12,7 +12,7 @@ interface ContactFormProps {
 }
 
 const fieldClassName =
-  'w-full rounded-[1.25rem] border border-rose-100 bg-white/70 px-5 py-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition-all duration-300 placeholder:text-slate-300 focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-400/10 focus:shadow-[0_0_20px_rgba(244,114,182,0.1)]';
+  'w-full rounded-[1.4rem] border border-rose-100 bg-white/78 px-5 py-4 text-sm font-medium text-slate-700 shadow-sm outline-none transition-all duration-300 placeholder:text-slate-300 focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-300/15 focus:shadow-[0_0_24px_rgba(244,114,182,0.14)]';
 
 const ContactForm: React.FC<ContactFormProps> = ({
   initialSubject = '',
@@ -81,8 +81,8 @@ const ContactForm: React.FC<ContactFormProps> = ({
   };
 
   return (
-    <div className="relative overflow-hidden rounded-[2.5rem] border border-rose-100/80 bg-white/88 p-6 shadow-[0_28px_90px_-45px_rgba(190,24,93,0.55)] backdrop-blur-xl md:p-8">
-      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-r from-rose-100/80 via-amber-50/60 to-transparent" />
+    <div className="page-glass-card relative overflow-hidden rounded-[2.6rem] p-6 md:p-8">
+      <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-r from-rose-100/85 via-amber-50/70 to-transparent" />
       <div className="absolute -right-10 top-10 h-32 w-32 rounded-full bg-rose-200/30 blur-3xl" />
       <div className="absolute -left-10 bottom-0 h-28 w-28 rounded-full bg-amber-100/50 blur-3xl" />
 
@@ -100,7 +100,7 @@ const ContactForm: React.FC<ContactFormProps> = ({
             </p>
           </div>
 
-          <div className="grid min-w-full gap-3 rounded-[1.75rem] border border-rose-100/80 bg-white/70 p-4 text-left shadow-sm sm:grid-cols-2 lg:min-w-[290px]">
+          <div className="page-stat-card grid min-w-full gap-3 rounded-[1.75rem] p-4 text-left sm:grid-cols-2 lg:min-w-[320px]">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
                 Reply window
@@ -122,6 +122,7 @@ const ContactForm: React.FC<ContactFormProps> = ({
 
         {status && (
           <div
+            aria-live="polite"
             className={`mb-6 rounded-[1.5rem] border px-5 py-4 text-sm font-semibold ${
               status.type === 'success'
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
@@ -141,6 +142,7 @@ const ContactForm: React.FC<ContactFormProps> = ({
               <input
                 type="text"
                 required
+                autoComplete="name"
                 placeholder="John Doe"
                 value={formData.name}
                 onChange={(e) =>
@@ -157,6 +159,7 @@ const ContactForm: React.FC<ContactFormProps> = ({
               <input
                 type="email"
                 required
+                autoComplete="email"
                 placeholder="john@example.com"
                 value={formData.email}
                 onChange={(e) =>

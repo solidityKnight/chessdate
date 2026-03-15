@@ -27,6 +27,11 @@ const FindPlayerPage: React.FC = () => {
 
   const trimmedQuery = query.trim();
   const readyToSearch = trimmedQuery.length >= 2;
+  const resultSummary = loading
+    ? 'Scanning the player pool...'
+    : readyToSearch
+      ? `${results.length} player${results.length === 1 ? '' : 's'} found`
+      : 'Start with at least two characters';
 
   useEffect(() => {
     if (!readyToSearch) {
@@ -67,13 +72,13 @@ const FindPlayerPage: React.FC = () => {
 
   return (
     <RomanticLayout>
-      <div className="mx-auto max-w-6xl px-4 py-14 md:px-6 md:py-16">
-        <section className="relative overflow-hidden rounded-[2.75rem] border border-rose-100/80 bg-white/78 px-6 py-8 shadow-[0_30px_100px_-45px_rgba(190,24,93,0.45)] backdrop-blur-xl md:px-10 md:py-10">
-          <div className="absolute -left-20 top-0 h-40 w-40 rounded-full bg-rose-200/35 blur-3xl" />
-          <div className="absolute right-0 top-12 h-48 w-48 rounded-full bg-amber-100/50 blur-3xl" />
-          <div className="absolute bottom-0 left-1/3 h-32 w-32 rounded-full bg-rose-100/50 blur-3xl" />
+      <div className="page-shell">
+        <section className="page-hero-card px-6 py-8 md:px-10 md:py-10">
+          <div className="absolute -left-16 top-0 h-40 w-40 rounded-full bg-rose-200/35 blur-3xl" />
+          <div className="absolute right-0 top-12 h-48 w-48 rounded-full bg-amber-100/55 blur-3xl" />
+          <div className="absolute bottom-0 left-1/3 h-32 w-32 rounded-full bg-rose-100/55 blur-3xl" />
 
-          <div className="relative z-10 grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="relative z-10 grid gap-8 lg:grid-cols-[1.12fr_0.88fr]">
             <div className="space-y-6">
               <span className="inline-flex rounded-full border border-rose-200 bg-white/80 px-4 py-1.5 text-[10px] font-black uppercase tracking-[0.24em] text-rose-500">
                 Community search
@@ -90,8 +95,8 @@ const FindPlayerPage: React.FC = () => {
                 </p>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="rounded-[1.75rem] border border-rose-100/80 bg-white/70 p-4 shadow-sm">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="page-stat-card rounded-[1.75rem] p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
                     Search status
                   </p>
@@ -99,7 +104,7 @@ const FindPlayerPage: React.FC = () => {
                     {loading ? 'Searching...' : readyToSearch ? 'Live' : 'Idle'}
                   </p>
                 </div>
-                <div className="rounded-[1.75rem] border border-rose-100/80 bg-white/70 p-4 shadow-sm">
+                <div className="page-stat-card rounded-[1.75rem] p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
                     Results
                   </p>
@@ -107,7 +112,15 @@ const FindPlayerPage: React.FC = () => {
                     {readyToSearch ? results.length : 0}
                   </p>
                 </div>
-                <div className="rounded-[1.75rem] border border-rose-100/80 bg-white/70 p-4 shadow-sm">
+                <div className="page-stat-card rounded-[1.75rem] p-4">
+                  <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+                    Suggested queries
+                  </p>
+                  <p className="mt-3 text-lg font-black text-slate-900">
+                    {suggestedQueries.length} ready
+                  </p>
+                </div>
+                <div className="page-stat-card rounded-[1.75rem] p-4">
                   <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
                     Best query
                   </p>
@@ -118,24 +131,61 @@ const FindPlayerPage: React.FC = () => {
               </div>
             </div>
 
-            <div className="rounded-[2.25rem] border border-rose-100/80 bg-slate-900 p-6 text-white shadow-[0_24px_80px_-45px_rgba(15,23,42,0.95)]">
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-rose-200">
-                Search notes
-              </p>
-              <div className="mt-5 space-y-4">
-                {searchTips.map((tip) => (
-                  <div
-                    key={tip}
-                    className="rounded-[1.5rem] border border-white/10 bg-white/5 p-4"
-                  >
-                    <p className="text-sm leading-7 text-slate-200">{tip}</p>
+            <div className="page-dark-card rounded-[2.35rem] p-6 text-white">
+              <div className="absolute right-0 top-0 h-36 w-36 rounded-full bg-rose-300/10 blur-3xl" />
+              <div className="absolute bottom-0 left-0 h-28 w-28 rounded-full bg-amber-200/10 blur-3xl" />
+
+              <div className="relative z-10 space-y-5">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.24em] text-rose-200">
+                    Search notes
+                  </p>
+                  <h2 className="mt-3 text-2xl font-black tracking-tight text-white">
+                    Keep the player pool feeling easy to scan.
+                  </h2>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-[1.5rem] border border-white/10 bg-white/6 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-200">
+                      Current query
+                    </p>
+                    <p className="mt-2 text-base font-semibold text-white">
+                      {readyToSearch ? trimmedQuery : 'Waiting for a clue'}
+                    </p>
                   </div>
-                ))}
+                  <div className="rounded-[1.5rem] border border-white/10 bg-white/6 p-4">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-200">
+                      Search mode
+                    </p>
+                    <p className="mt-2 text-base font-semibold text-white">
+                      {loading
+                        ? 'Refreshing results'
+                        : readyToSearch
+                          ? 'Live discovery'
+                          : 'Standby'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {searchTips.map((tip, index) => (
+                    <div
+                      key={tip}
+                      className="flex items-start gap-3 rounded-[1.5rem] border border-white/10 bg-white/5 p-4"
+                    >
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 text-[10px] font-black uppercase tracking-[0.18em] text-rose-100">
+                        {index + 1}
+                      </span>
+                      <p className="text-sm leading-7 text-slate-200">{tip}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
 
-          <div className="relative z-10 mt-8 rounded-[2rem] border border-rose-100/80 bg-white/80 p-4 shadow-[0_18px_60px_-35px_rgba(190,24,93,0.35)] md:p-5">
+          <div className="page-glass-card relative z-10 mt-8 rounded-[2rem] p-4 md:p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center">
               <div className="relative flex-1">
                 <span className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 rounded-full border border-rose-100 bg-rose-50 px-2 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-rose-500">
@@ -143,7 +193,7 @@ const FindPlayerPage: React.FC = () => {
                 </span>
                 <input
                   type="text"
-                  className="w-full rounded-[1.75rem] border border-rose-100 bg-white px-5 py-5 pl-24 text-base font-medium text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-none transition duration-200 placeholder:text-slate-300 focus:border-rose-300 focus:ring-4 focus:ring-rose-200/50"
+                  className="w-full rounded-[1.85rem] border border-rose-100 bg-white px-5 py-5 pl-24 text-base font-medium text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] outline-none transition duration-200 placeholder:text-slate-300 focus:border-rose-300 focus:ring-4 focus:ring-rose-200/50"
                   placeholder="Try a username, display name, or part of one..."
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
@@ -177,12 +227,8 @@ const FindPlayerPage: React.FC = () => {
               </h2>
             </div>
 
-            <div className="rounded-full border border-rose-100 bg-white/75 px-4 py-2 text-sm font-semibold text-slate-500 shadow-sm">
-              {loading
-                ? 'Scanning the player pool...'
-                : readyToSearch
-                  ? `${results.length} player${results.length === 1 ? '' : 's'} found`
-                  : 'Start with at least two characters'}
+            <div className="rounded-full border border-rose-100 bg-white/85 px-4 py-2 text-sm font-semibold text-slate-500 shadow-sm">
+              {resultSummary}
             </div>
           </div>
 
@@ -191,7 +237,7 @@ const FindPlayerPage: React.FC = () => {
               [...Array(6)].map((_, index) => (
                 <div
                   key={index}
-                  className="rounded-[2rem] border border-rose-100/80 bg-white/75 p-6 shadow-[0_20px_60px_-35px_rgba(190,24,93,0.35)]"
+                  className="page-glass-card rounded-[2rem] p-6"
                 >
                   <div className="animate-pulse space-y-5">
                     <div className="flex items-start justify-between">
@@ -202,10 +248,14 @@ const FindPlayerPage: React.FC = () => {
                           <div className="h-3 w-20 rounded-full bg-rose-50" />
                         </div>
                       </div>
-                      <div className="h-7 w-16 rounded-full bg-rose-50" />
+                      <div className="h-7 w-20 rounded-full bg-rose-50" />
                     </div>
                     <div className="h-8 w-28 rounded-full bg-rose-100" />
-                    <div className="h-10 rounded-full bg-rose-100" />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="h-16 rounded-[1.3rem] bg-rose-50" />
+                      <div className="h-16 rounded-[1.3rem] bg-rose-50" />
+                    </div>
+                    <div className="h-10 rounded-[1rem] bg-rose-100" />
                   </div>
                 </div>
               ))}
@@ -218,7 +268,7 @@ const FindPlayerPage: React.FC = () => {
           </div>
 
           {!loading && !readyToSearch && (
-            <div className="mt-6 rounded-[2.5rem] border border-dashed border-rose-200 bg-white/65 p-10 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+            <div className="page-dashed-card mt-6 rounded-[2.5rem] p-10 text-center">
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-rose-500">
                 Ready when you are
               </p>
@@ -233,7 +283,7 @@ const FindPlayerPage: React.FC = () => {
           )}
 
           {!loading && readyToSearch && results.length === 0 && (
-            <div className="mt-6 rounded-[2.5rem] border border-rose-100/80 bg-white/75 p-10 text-center shadow-[0_20px_60px_-35px_rgba(190,24,93,0.35)]">
+            <div className="page-glass-card mt-6 rounded-[2.5rem] p-10 text-center">
               <p className="text-[10px] font-black uppercase tracking-[0.24em] text-rose-500">
                 No matches yet
               </p>

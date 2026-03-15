@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/gameStore';
 
 type RomanticNavbarProps = {
@@ -8,7 +8,20 @@ type RomanticNavbarProps = {
 
 const RomanticNavbar: React.FC<RomanticNavbarProps> = ({ showAuthButton = true }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const token = useGameStore((s) => s.token);
+  const navItems = [
+    { label: 'HOME', path: '/' },
+    { label: 'PLAY', path: '/play' },
+    { label: 'LEADERBOARD', path: '/leaderboard' },
+    { label: 'FIND PLAYERS', path: '/find' },
+    { label: 'CONTACT', path: '/contact' },
+  ];
+
+  const isActive = (path: string) =>
+    path === '/'
+      ? location.pathname === path
+      : location.pathname === path || location.pathname.startsWith(`${path}/`);
 
   return (
     <header className="navbar">
@@ -17,17 +30,34 @@ const RomanticNavbar: React.FC<RomanticNavbarProps> = ({ showAuthButton = true }
         ChessDate.in
       </div>
       <nav>
-        <a href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }}>HOME</a>
-        <a href="/play" onClick={(e) => { e.preventDefault(); navigate('/play'); }}>PLAY</a>
-        <a href="/leaderboard" onClick={(e) => { e.preventDefault(); navigate('/leaderboard'); }}>LEADERBOARD</a>
-        <a href="/find" onClick={(e) => { e.preventDefault(); navigate('/find'); }}>FIND PLAYERS</a>
-        <a href="/contact" onClick={(e) => { e.preventDefault(); navigate('/contact'); }}>CONTACT</a>
+        {navItems.map((item) => (
+          <a
+            key={item.path}
+            href={item.path}
+            className={`nav-link${isActive(item.path) ? ' is-active' : ''}`}
+            aria-current={isActive(item.path) ? 'page' : undefined}
+            onClick={(e) => {
+              e.preventDefault();
+              navigate(item.path);
+            }}
+          >
+            {item.label}
+          </a>
+        ))}
       </nav>
       {showAuthButton && (
         token ? (
-          <button className="domain-btn" onClick={() => navigate('/profile')}>Profile</button>
+          <button
+            className={`domain-btn${isActive('/profile') ? ' is-active' : ''}`}
+            type="button"
+            onClick={() => navigate('/profile')}
+          >
+            Profile
+          </button>
         ) : (
-          <button className="domain-btn" onClick={() => navigate('/login')}>Login</button>
+          <button className="domain-btn" type="button" onClick={() => navigate('/login')}>
+            Login
+          </button>
         )
       )}
     </header>
